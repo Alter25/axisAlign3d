@@ -3,6 +3,7 @@ import { useAlignmentCalculations } from '@/shared/hooks/useAlignmentCalculation
 import { Scene } from './3d/Scene'
 import { ReadingForm } from './ui/ReadingForm'
 import { CorrectionSteps } from './ui/CorrectionSteps'
+import { UsageInstructions } from './ui/UsageInstructions'
 import { DEV_CORRECTIONS } from '../dev/devCorrections'
 import { ArrowEditor, INITIAL_EDITOR_STATE } from '../dev/ArrowEditor'
 import type { ArrowEditorState } from '../dev/ArrowEditor'
@@ -221,8 +222,17 @@ export function Dashboard() {
 
       {/* Pasos de corrección */}
       {!devMode && activeCorrections.length > 0 && (
-        <div className="order-4 rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-3">
-          <CorrectionSteps corrections={activeCorrections} />
+        <div className="order-4 lg:col-span-3">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CorrectionSteps corrections={activeCorrections} />
+          </div>
+        </div>
+      )}
+
+      {/* Instrucciones de uso */}
+      {!devMode && (
+        <div className="order-5 lg:col-span-3">
+          <UsageInstructions />
         </div>
       )}
     </div>
