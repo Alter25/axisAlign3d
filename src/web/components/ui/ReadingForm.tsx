@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { ReadingData } from '@/shared/types/alignment'
+import { DialIndicator, computeTIR, EMPTY_DIAL_READINGS } from './DialIndicator'
+import type { DialReadings } from './DialIndicator'
 
 interface ReadingFormProps {
   onSubmit: (data: ReadingData) => void
@@ -7,10 +9,6 @@ interface ReadingFormProps {
 
 // Descripciones técnicas para cada campo
 const FIELD_INFO: Record<string, string> = {
-  runoutAxial:
-    'Medido con reloj comparador apoyado en la CARA del acople, girando el eje a mano lentamente. Detecta falta de paralelismo axial (cocking). Valor aceptable típico: < 50 µm.',
-  runoutRadial:
-    'Medido con reloj comparador apoyado en el DIÁMETRO exterior del acople, girando el eje. Detecta excentricidad o descentramiento radial. Valor aceptable típico: < 30 µm.',
   verticalVibration:
     'Velocidad de vibración en dirección vertical, medida sobre la carcasa del rodamiento con vibrómetro o analizador. Zonas ISO 10816: A < 2.3 | B < 4.5 | C < 7.1 | D > 11 mm/s.',
   horizontalVibration:
@@ -42,8 +40,8 @@ function FieldTooltip({ fieldKey }: { fieldKey: string }) {
 }
 
 interface FieldState {
-  runoutAxial: string
-  runoutRadial: string
+  dialAxial: DialReadings
+  dialRadial: DialReadings
   verticalVibration: string
   horizontalVibration: string
   verticalPhase: string
@@ -51,9 +49,19 @@ interface FieldState {
   bearingTemperature: string
 }
 
+interface FormErrors {
+  dialAxial?: string
+  dialRadial?: string
+  verticalVibration?: string
+  horizontalVibration?: string
+  verticalPhase?: string
+  horizontalPhase?: string
+  bearingTemperature?: string
+}
+
 const empty: FieldState = {
-  runoutAxial: '',
-  runoutRadial: '',
+  dialAxial: EMPTY_DIAL_READINGS,
+  dialRadial: EMPTY_DIAL_READINGS,
   verticalVibration: '',
   horizontalVibration: '',
   verticalPhase: '',
@@ -69,24 +77,21 @@ function parseOptional(v: string): number | undefined {
 
 export function ReadingForm({ onSubmit }: ReadingFormProps) {
   const [fields, setFields] = useState<FieldState>(empty)
-  const [errors, setErrors] = useState<Partial<FieldState>>({})
+  const [errors, setErrors] = useState<FormErrors>({})
   const [showVibration, setShowVibration] = useState(false)
 
-  function set(key: keyof FieldState, value: string) {
+  function set(key: keyof Omit<FieldState, 'dialAxial' | 'dialRadial'>, value: string) {
     setFields(prev => ({ ...prev, [key]: value }))
     setErrors(prev => ({ ...prev, [key]: undefined }))
   }
 
   function validate(): boolean {
-    const next: Partial<FieldState> = {}
+    const next: FormErrors = {}
 
-    const axial = Number(fields.runoutAxial)
-    const radial = Number(fields.runoutRadial)
-
-    if (fields.runoutAxial.trim() === '' || isNaN(axial) || axial < 0)
-      next.runoutAxial = 'Ingresa un valor ≥ 0'
-    if (fields.runoutRadial.trim() === '' || isNaN(radial) || radial < 0)
-      next.runoutRadial = 'Ingresa un valor ≥ 0'
+    if (computeTIR(fields.dialAxial) === null)
+      next.dialAxial = 'Ingresa al menos 2 lecturas'
+    if (computeTIR(fields.dialRadial) === null)
+      next.dialRadial = 'Ingresa al menos 2 lecturas'
 
     if (showVibration) {
       if (fields.verticalVibration !== '') {
@@ -121,8 +126,8 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     if (!validate()) return
 
     const data: ReadingData = {
-      runoutAxial: Number(fields.runoutAxial),
-      runoutRadial: Number(fields.runoutRadial),
+      runoutAxial: computeTIR(fields.dialAxial)!,
+      runoutRadial: computeTIR(fields.dialRadial)!,
       verticalVibration: showVibration ? parseOptional(fields.verticalVibration) : undefined,
       horizontalVibration: showVibration ? parseOptional(fields.horizontalVibration) : undefined,
       verticalPhase: showVibration ? parseOptional(fields.verticalPhase) : undefined,
@@ -142,29 +147,27 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
       <h2 className="text-base font-semibold text-slate-800">Lecturas de Campo</h2>
 
       {/* ── RUNOUT (siempre visible) ── */}
-      <section className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-          Runout — Reloj Comparador
-        </p>
-
-        <NumberField
-          id="runoutAxial"
-          label="Runout Axial"
-          unit="µm"
-          placeholder="0 – 500"
-          value={fields.runoutAxial}
-          error={errors.runoutAxial}
-          onChange={v => set('runoutAxial', v)}
+      <section className="flex flex-col gap-5">
+        <DialIndicator
+          label="Runout Axial — cara del acople"
+          type="axial"
+          readings={fields.dialAxial}
+          onChange={(pos, val) => {
+            setFields(prev => ({ ...prev, dialAxial: { ...prev.dialAxial, [pos]: val } }))
+            setErrors(prev => ({ ...prev, dialAxial: undefined }))
+          }}
+          error={errors.dialAxial}
         />
 
-        <NumberField
-          id="runoutRadial"
-          label="Runout Radial"
-          unit="µm"
-          placeholder="0 – 500"
-          value={fields.runoutRadial}
-          error={errors.runoutRadial}
-          onChange={v => set('runoutRadial', v)}
+        <DialIndicator
+          label="Runout Radial — diámetro del acople"
+          type="radial"
+          readings={fields.dialRadial}
+          onChange={(pos, val) => {
+            setFields(prev => ({ ...prev, dialRadial: { ...prev.dialRadial, [pos]: val } }))
+            setErrors(prev => ({ ...prev, dialRadial: undefined }))
+          }}
+          error={errors.dialRadial}
         />
       </section>
 
