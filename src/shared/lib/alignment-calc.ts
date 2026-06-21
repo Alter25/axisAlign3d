@@ -1,6 +1,13 @@
 import type { ReadingData, AlignmentCorrection, PataLocation, RunoutReadings } from '../types/alignment'
 import { RUNOUT_THRESHOLDS } from './constants'
 
+function runoutPriority(tir: number, warning: number, critical: number): 1 | 2 | 3 | null {
+  if (tir <= 0) return null
+  if (tir > critical) return 1
+  if (tir > warning)  return 2
+  return 3
+}
+
 export function calculateCorrections(reading: ReadingData): AlignmentCorrection[] {
   const corrections: AlignmentCorrection[] = []
 
@@ -10,9 +17,9 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   //   • Error angular vertical:    r6  (skill paso 5: positivo → calzar patas traseras)
   //   • Error angular horizontal:  r9 - r3  (skill paso 7: positivo → mover patas traseras a la derecha)
   const tirAxial = reading.runoutAxial
-  if (tirAxial > RUNOUT_THRESHOLDS.axial_warning) {
-    const pAxial: 1 | 2 = tirAxial > RUNOUT_THRESHOLDS.axial_critical ? 1 : 2
-    const urgencyAxial = pAxial === 1 ? 'CRÍTICO' : 'elevado'
+  const pAxial = runoutPriority(tirAxial, RUNOUT_THRESHOLDS.axial_warning, RUNOUT_THRESHOLDS.axial_critical)
+  if (pAxial !== null) {
+    const urgencyAxial = pAxial === 1 ? 'CRÍTICO' : pAxial === 2 ? 'elevado' : 'leve'
 
     if (reading.runoutAxialReadings) {
       const { r6, r3, r9 } = reading.runoutAxialReadings as RunoutReadings
@@ -66,9 +73,9 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   //   • r6 < 0 → centro del acople desplazado hacia 12h (arriba) → excentricidad vertical
   //   • r3 / r9 → componente lateral de excentricidad
   const tirRadial = reading.runoutRadial
-  if (tirRadial > RUNOUT_THRESHOLDS.radial_warning) {
-    const pRadial: 1 | 2 = tirRadial > RUNOUT_THRESHOLDS.radial_critical ? 1 : 2
-    const urgencyRadial = pRadial === 1 ? 'CRÍTICO' : 'elevado'
+  const pRadial = runoutPriority(tirRadial, RUNOUT_THRESHOLDS.radial_warning, RUNOUT_THRESHOLDS.radial_critical)
+  if (pRadial !== null) {
+    const urgencyRadial = pRadial === 1 ? 'CRÍTICO' : pRadial === 2 ? 'elevado' : 'leve'
 
     if (reading.runoutRadialReadings) {
       const { r6, r3, r9 } = reading.runoutRadialReadings as RunoutReadings
