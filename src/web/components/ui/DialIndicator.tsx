@@ -20,6 +20,39 @@ export function tirToMicrons(tir: number, unit: DialUnit): number {
   return unit === 'centesimas' ? tir * 10 : tir * 25.4
 }
 
+// Returns the 4 readings normalized to 12h=0, converted to µm.
+// Returns null if any position is not filled.
+export function getReadingsInMicrons(
+  readings: DialReadings,
+  unit: DialUnit
+): { r12: number; r3: number; r6: number; r9: number } | null {
+  const toMicrons = unit === 'centesimas' ? 10 : 25.4
+  const parse = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n }
+  const r12 = parse(readings['12h'])
+  const r3  = parse(readings['3h'])
+  const r6  = parse(readings['6h'])
+  const r9  = parse(readings['9h'])
+  if (r12 === null || r3 === null || r6 === null || r9 === null) return null
+  return {
+    r12: 0,
+    r3:  (r3 - r12) * toMicrons,
+    r6:  (r6 - r12) * toMicrons,
+    r9:  (r9 - r12) * toMicrons,
+  }
+}
+
+// Geometric constraint for a flat plane or concentric cylinder:
+// 12h + 6h = 3h + 9h  →  deviation should be 0
+function planeConsistencyDeviation(readings: DialReadings): number | null {
+  const parse = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n }
+  const r12 = parse(readings['12h'])
+  const r3  = parse(readings['3h'])
+  const r6  = parse(readings['6h'])
+  const r9  = parse(readings['9h'])
+  if (r12 === null || r3 === null || r6 === null || r9 === null) return null
+  return Math.abs((r12 + r6) - (r3 + r9))
+}
+
 const UNIT_LABEL: Record<DialUnit, string> = {
   centesimas: '¢',    // centésimas de mm (0.01 mm)
   miles:      'mil',  // milésimas de pulgada (0.001")
@@ -71,6 +104,8 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
   const { warn, crit } = THRESHOLDS[type][unit]
   const decimals = UNIT_DECIMALS[unit]
   const unitLabel = UNIT_LABEL[unit]
+  const consistency = planeConsistencyDeviation(readings)
+  const consistencyTolerance = unit === 'centesimas' ? 1.0 : 0.5
 
   let tirLabel = '', tirBg = ''
   if (tir !== null) {
@@ -211,6 +246,20 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
           <span className="text-[11px] text-slate-400">2+ lecturas para calcular</span>
         )}
       </div>
+
+      {/* Geometric consistency check: 12h + 6h must equal 3h + 9h */}
+      {consistency !== null && (
+        <div className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-mono ${
+          consistency <= consistencyTolerance
+            ? 'border-green-200 bg-green-50 text-green-700'
+            : 'border-amber-200 bg-amber-50 text-amber-700'
+        }`}>
+          {consistency <= consistencyTolerance
+            ? '✓ Plano consistente  (12h + 6h = 3h + 9h)'
+            : `⚠ Inconsistencia: ${consistency.toFixed(decimals)} ${unitLabel}  (12h + 6h ≠ 3h + 9h)`
+          }
+        </div>
+      )}
 
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>

@@ -20,20 +20,18 @@ const LOCATION_LABELS: Record<string, string> = {
 }
 
 const DIRECTION_LABELS: Record<string, string> = {
-  vertical:   'Shimming vertical',
-  horizontal: 'Desplazamiento lateral',
+  vertical:   'Corrección vertical',
+  horizontal: 'Corrección lateral',
+  axial:      'Corrección axial',
 }
 
 const SIDE_LABELS: Record<string, string> = {
-  top:    '↑ Subir (quitar shims)',
-  bottom: '↓ Bajar (agregar shims)',
+  top:    '↑ Subir — agregar shims',
+  bottom: '↓ Bajar — quitar shims',
   left:   '← Mover a la izquierda',
   right:  '→ Mover a la derecha',
-}
-
-const DIRECTION_UNITS: Record<string, string> = {
-  vertical:   'mm/s',
-  horizontal: 'mm/s',
+  front:  '⟵ Acercar al acople',
+  back:   '⟶ Alejar del acople',
 }
 
 interface StepCardProps {
@@ -43,7 +41,7 @@ interface StepCardProps {
 
 function StepCard({ correction, step }: StepCardProps) {
   const color = PRIORITY_COLORS[correction.priority]
-  const unit = DIRECTION_UNITS[correction.direction] ?? ''
+  const unit = correction.unit ?? ''
 
   return (
     <div

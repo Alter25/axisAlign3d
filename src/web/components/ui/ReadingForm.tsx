@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ReadingData } from '@/shared/types/alignment'
-import { DialIndicator, computeTIR, tirToMicrons, EMPTY_DIAL_READINGS } from './DialIndicator'
+import { DialIndicator, computeTIR, tirToMicrons, getReadingsInMicrons, EMPTY_DIAL_READINGS } from './DialIndicator'
 import type { DialReadings, DialUnit } from './DialIndicator'
 
 interface ReadingFormProps {
@@ -129,6 +129,8 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     const data: ReadingData = {
       runoutAxial: tirToMicrons(computeTIR(fields.dialAxial)!, unit),
       runoutRadial: tirToMicrons(computeTIR(fields.dialRadial)!, unit),
+      runoutAxialReadings:  getReadingsInMicrons(fields.dialAxial,  unit) ?? undefined,
+      runoutRadialReadings: getReadingsInMicrons(fields.dialRadial, unit) ?? undefined,
       verticalVibration: showVibration ? parseOptional(fields.verticalVibration) : undefined,
       horizontalVibration: showVibration ? parseOptional(fields.horizontalVibration) : undefined,
       verticalPhase: showVibration ? parseOptional(fields.verticalPhase) : undefined,

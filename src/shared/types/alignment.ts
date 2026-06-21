@@ -1,11 +1,21 @@
+// Lecturas individuales de las 4 posiciones del reloj (normalizadas a 12h=0, en µm)
+export interface RunoutReadings {
+  r12: number   // siempre 0 (referencia)
+  r3:  number   // lectura a 90° relativa a 12h, en µm
+  r6:  number   // lectura a 180° relativa a 12h, en µm
+  r9:  number   // lectura a 270° relativa a 12h, en µm
+}
+
 // Datos capturados desde el formulario de lectura
 export interface ReadingData {
   verticalVibration?: number;   // mm/s (opcional — prealineación rápida)
   horizontalVibration?: number; // mm/s (opcional — prealineación rápida)
   verticalPhase?: number;       // 0-360 grados (opcional)
   horizontalPhase?: number;     // 0-360 grados (opcional)
-  runoutAxial: number;          // micrones
-  runoutRadial: number;         // micrones
+  runoutAxial: number;          // TIR en µm
+  runoutRadial: number;         // TIR en µm
+  runoutAxialReadings?: RunoutReadings   // lecturas individuales para corrección direccional
+  runoutRadialReadings?: RunoutReadings
   bearingTemperature?: number;  // °C (opcional)
 }
 
@@ -18,7 +28,8 @@ export interface AlignmentCorrection {
   location: PataLocation | 'shaft';  // patas = flechas 3D | shaft = solo texto
   direction: 'vertical' | 'horizontal' | 'axial';
   side: 'top' | 'bottom' | 'left' | 'right' | 'front' | 'back';
-  magnitude: number;    // mm/s vibración o µm runout
+  magnitude: number;
+  unit?: 'mm/s' | 'µm' | '°C';
   priority: 1 | 2 | 3; // 1=crítico, 2=advertencia, 3=info
   description: string;
   visible?: boolean;
