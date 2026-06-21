@@ -100,33 +100,33 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
     }
   }
 
-  // ── Runout axial — solo texto, sin flecha 3D (location: shaft) ────────────
+  // ── Runout axial — flecha axial en el acople ──────────────────────────────
   if (reading.runoutAxial > RUNOUT_THRESHOLDS.axial_critical) {
     corrections.push({
-      id: 'axial-critical', location: 'shaft', direction: 'vertical', side: 'top',
+      id: 'axial-critical', location: 'shaft', direction: 'axial', side: 'front',
       magnitude: reading.runoutAxial, priority: 1,
-      description: `Runout axial CRÍTICO: ${reading.runoutAxial} µm — revisar cara del acople y fijación axial.`,
+      description: `Runout axial CRÍTICO: ${reading.runoutAxial.toFixed(0)} µm — revisar cara del acople y fijación axial.`,
     })
   } else if (reading.runoutAxial > RUNOUT_THRESHOLDS.axial_warning) {
     corrections.push({
-      id: 'axial-warning', location: 'shaft', direction: 'vertical', side: 'top',
+      id: 'axial-warning', location: 'shaft', direction: 'axial', side: 'front',
       magnitude: reading.runoutAxial, priority: 2,
-      description: `Runout axial elevado: ${reading.runoutAxial} µm — verificar paralelismo del acople.`,
+      description: `Runout axial elevado: ${reading.runoutAxial.toFixed(0)} µm — verificar paralelismo del acople.`,
     })
   }
 
-  // ── Runout radial — solo texto ─────────────────────────────────────────────
+  // ── Runout radial — flecha vertical en el acople ───────────────────────────
   if (reading.runoutRadial > RUNOUT_THRESHOLDS.radial_critical) {
     corrections.push({
-      id: 'radial-critical', location: 'shaft', direction: 'horizontal', side: 'right',
+      id: 'radial-critical', location: 'shaft', direction: 'vertical', side: 'top',
       magnitude: reading.runoutRadial, priority: 1,
-      description: `Runout radial CRÍTICO: ${reading.runoutRadial} µm — verificar excentricidad del eje.`,
+      description: `Runout radial CRÍTICO: ${reading.runoutRadial.toFixed(0)} µm — verificar excentricidad del eje.`,
     })
   } else if (reading.runoutRadial > RUNOUT_THRESHOLDS.radial_warning) {
     corrections.push({
-      id: 'radial-warning', location: 'shaft', direction: 'horizontal', side: 'right',
+      id: 'radial-warning', location: 'shaft', direction: 'vertical', side: 'top',
       magnitude: reading.runoutRadial, priority: 2,
-      description: `Runout radial elevado: ${reading.runoutRadial} µm — verificar concentricidad del acople.`,
+      description: `Runout radial elevado: ${reading.runoutRadial.toFixed(0)} µm — verificar concentricidad del acople.`,
     })
   }
 

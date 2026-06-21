@@ -69,8 +69,9 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
   const { xDir, yDir, zDir, center } = useMemo(() => computeAxisVectors(axisPoints), [axisPoints])
 
   const position: [number, number, number] = useMemo(() => {
-    const base = correction.direction === 'axial'
-      ? (axialPosition ?? [center.x, center.y, center.z] as [number, number, number])
+    const couplingCenter: [number, number, number] = axialPosition ?? [center.x, center.y, center.z]
+    const base = (correction.direction === 'axial' || correction.location === 'shaft')
+      ? couplingCenter
       : (positions[correction.location as keyof typeof PATA_POSITIONS] ?? [0, 0, 0])
     return [base[0] + offset[0], base[1] + offset[1], base[2] + offset[2]]
   }, [correction.location, correction.direction, axialPosition, center, offset, positions])
@@ -105,7 +106,7 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
 export function ArrowIndicators({ corrections, positionsOverride, offsetsOverride, arrowScale, axisPoints, axialPosition }: ArrowIndicatorsProps) {
   const resolvedAxis = axisPoints ?? AXIS_POINTS
   const visible = corrections.filter(c =>
-    c.visible !== false && (PATA_KEYS.has(c.location) || c.direction === 'axial')
+    c.visible !== false && (PATA_KEYS.has(c.location) || c.direction === 'axial' || c.location === 'shaft')
   )
   return (
     <>
