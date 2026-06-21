@@ -6,12 +6,10 @@ export type DialUnit = 'centesimas' | 'miles'
 
 export const EMPTY_DIAL_READINGS: DialReadings = { '12h': '', '3h': '', '6h': '', '9h': '' }
 
-export function computeTIR(readings: DialReadings): number | null {
+// Campos vacíos se tratan como 0 (12h es referencia = 0 en campo)
+export function computeTIR(readings: DialReadings): number {
   const vals = (['12h', '3h', '6h', '9h'] as DialPosition[])
-    .map(p => readings[p].trim())
-    .filter(v => v !== '' && !isNaN(Number(v)))
-    .map(Number)
-  if (vals.length < 2) return null
+    .map(p => { const n = parseFloat(readings[p].trim()); return isNaN(n) ? 0 : n })
   return Math.max(...vals) - Math.min(...vals)
 }
 
@@ -21,18 +19,17 @@ export function tirToMicrons(tir: number, unit: DialUnit): number {
 }
 
 // Returns the 4 readings normalized to 12h=0, converted to µm.
-// Returns null if any position is not filled.
+// Empty fields default to 0 (12h=0 is the reference in field practice).
 export function getReadingsInMicrons(
   readings: DialReadings,
   unit: DialUnit
-): { r12: number; r3: number; r6: number; r9: number } | null {
+): { r12: number; r3: number; r6: number; r9: number } {
   const toMicrons = unit === 'centesimas' ? 10 : 25.4
-  const parse = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n }
+  const parse = (v: string) => { const n = parseFloat(v.trim()); return isNaN(n) ? 0 : n }
   const r12 = parse(readings['12h'])
   const r3  = parse(readings['3h'])
   const r6  = parse(readings['6h'])
   const r9  = parse(readings['9h'])
-  if (r12 === null || r3 === null || r6 === null || r9 === null) return null
   return {
     r12: 0,
     r3:  (r3 - r12) * toMicrons,
@@ -106,13 +103,12 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
   const unitLabel = UNIT_LABEL[unit]
   const consistency = planeConsistencyDeviation(readings)
   const consistencyTolerance = unit === 'centesimas' ? 1.0 : 0.5
+  const anyFilled = (['12h', '3h', '6h', '9h'] as DialPosition[]).some(p => readings[p].trim() !== '')
 
   let tirLabel = '', tirBg = ''
-  if (tir !== null) {
-    if (tir < warn)      { tirLabel = 'BIEN';    tirBg = '#22c55e' }
-    else if (tir < crit) { tirLabel = 'ALERTA';  tirBg = '#f59e0b' }
-    else                 { tirLabel = 'CRÍTICO'; tirBg = '#ef4444' }
-  }
+  if (tir < warn)      { tirLabel = 'BIEN';    tirBg = '#22c55e' }
+  else if (tir < crit) { tirLabel = 'ALERTA';  tirBg = '#f59e0b' }
+  else                 { tirLabel = 'CRÍTICO'; tirBg = '#ef4444' }
 
   const selVal = readings[selected].trim()
   const selNum = selVal !== '' && !isNaN(Number(selVal)) ? Number(selVal) : null
@@ -230,7 +226,7 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
       {/* TIR result bar */}
       <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5">
         <span className="text-xs font-semibold text-slate-600">TIR</span>
-        {tir !== null ? (
+        {anyFilled ? (
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-bold text-slate-800">
               {tir.toFixed(decimals)} {unitLabel}
@@ -243,7 +239,7 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
             </span>
           </div>
         ) : (
-          <span className="text-[11px] text-slate-400">2+ lecturas para calcular</span>
+          <span className="text-[11px] text-slate-400">Ingresa lecturas</span>
         )}
       </div>
 

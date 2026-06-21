@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReadingData } from '@/shared/types/alignment'
 import { DialIndicator, computeTIR, tirToMicrons, getReadingsInMicrons, EMPTY_DIAL_READINGS } from './DialIndicator'
-import type { DialReadings, DialUnit } from './DialIndicator'
+import type { DialReadings, DialUnit, DialPosition } from './DialIndicator'
 
 interface ReadingFormProps {
   onSubmit: (data: ReadingData) => void
@@ -88,11 +88,13 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
 
   function validate(): boolean {
     const next: FormErrors = {}
+    const hasFilled = (d: DialReadings) =>
+      (['12h', '3h', '6h', '9h'] as DialPosition[]).some(p => d[p].trim() !== '' && !isNaN(Number(d[p])))
 
-    if (computeTIR(fields.dialAxial) === null)
-      next.dialAxial = 'Ingresa al menos 2 lecturas'
-    if (computeTIR(fields.dialRadial) === null)
-      next.dialRadial = 'Ingresa al menos 2 lecturas'
+    if (!hasFilled(fields.dialAxial))
+      next.dialAxial = 'Ingresa al menos una lectura'
+    if (!hasFilled(fields.dialRadial))
+      next.dialRadial = 'Ingresa al menos una lectura'
 
     if (showVibration) {
       if (fields.verticalVibration !== '') {
@@ -127,10 +129,10 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     if (!validate()) return
 
     const data: ReadingData = {
-      runoutAxial: tirToMicrons(computeTIR(fields.dialAxial)!, unit),
-      runoutRadial: tirToMicrons(computeTIR(fields.dialRadial)!, unit),
-      runoutAxialReadings:  getReadingsInMicrons(fields.dialAxial,  unit) ?? undefined,
-      runoutRadialReadings: getReadingsInMicrons(fields.dialRadial, unit) ?? undefined,
+      runoutAxial:         tirToMicrons(computeTIR(fields.dialAxial),  unit),
+      runoutRadial:        tirToMicrons(computeTIR(fields.dialRadial), unit),
+      runoutAxialReadings:  getReadingsInMicrons(fields.dialAxial,  unit),
+      runoutRadialReadings: getReadingsInMicrons(fields.dialRadial, unit),
       verticalVibration: showVibration ? parseOptional(fields.verticalVibration) : undefined,
       horizontalVibration: showVibration ? parseOptional(fields.horizontalVibration) : undefined,
       verticalPhase: showVibration ? parseOptional(fields.verticalPhase) : undefined,
