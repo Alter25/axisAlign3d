@@ -88,15 +88,21 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
   })
 
   return (
-    <group ref={groupRef} position={position} scale={arrowScale}>
+    <group ref={groupRef} position={position} scale={arrowScale} renderOrder={10}>
       <group quaternion={quaternion}>
-        <mesh>
+        <mesh renderOrder={10}>
           <cylinderGeometry args={[0.04, 0.04, 0.5, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive} />
+          <meshStandardMaterial
+            color={color} emissive={color} emissiveIntensity={emissive}
+            depthTest={false} depthWrite={false} transparent
+          />
         </mesh>
-        <mesh position={[0, 0.375, 0]}>
+        <mesh position={[0, 0.375, 0]} renderOrder={10}>
           <coneGeometry args={[0.1, 0.25, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive} />
+          <meshStandardMaterial
+            color={color} emissive={color} emissiveIntensity={emissive}
+            depthTest={false} depthWrite={false} transparent
+          />
         </mesh>
       </group>
     </group>
@@ -108,6 +114,9 @@ export function ArrowIndicators({ corrections, positionsOverride, offsetsOverrid
   const visible = corrections.filter(c =>
     c.visible !== false && (PATA_KEYS.has(c.location) || c.direction === 'axial' || c.location === 'shaft')
   )
+  if (import.meta.env.DEV) {
+    console.log('[ArrowIndicators] corrections:', corrections.length, '| visible:', visible.length, visible.map(c => `${c.id}@${c.location}`))
+  }
   return (
     <>
       {visible.map(c => (
