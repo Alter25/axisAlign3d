@@ -50,9 +50,12 @@ export function UsageInstructions() {
           <Block title="Flujo de trabajo">
             <div className="flex flex-col gap-3">
               <Step n={1} title="Medir en campo">
-                Con el equipo en marcha, toma lecturas con reloj comparador (runout axial y radial)
-                y opcionalmente con vibrómetro o analizador (vibración vertical/horizontal + fase).
-                Mide también la temperatura superficial de rodamientos con pirómetro infrarrojo.
+                <strong>Equipo fuera de servicio (LOTO):</strong> monta el reloj comparador y gira
+                el eje a mano para tomar las lecturas de runout axial y radial en las 4 posiciones
+                (12h → 3h → 6h → 9h).
+                <br />
+                <strong>Equipo en marcha:</strong> opcionalmente mide vibración y temperatura de
+                rodamientos con vibrómetro/analizador y pirómetro infrarrojo.
               </Step>
 
               <Step n={2} title="Ingresar datos">
