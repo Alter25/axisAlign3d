@@ -6,6 +6,9 @@ export const RUNOUT_THRESHOLDS = {
   radial_critical: 75,
 } as const
 
+// Posición del acople (centro entre ejes motor-bomba) — calibrado en modo DEV
+export const AXIAL_ARROW_POSITION: [number, number, number] = [-41.5, 0, -36]
+
 // Eje del equipo — puntos calibrados en modo DEV
 export const AXIS_POINTS = {
   x1: [ 237, 0,  243] as [number, number, number],
@@ -20,7 +23,7 @@ export const AXIS_POINTS = {
 export const PATA_POSITIONS = {
   'front-left':  [  9.000,  -0.500, -33.837] as [number, number, number],
   'front-right': [ -9.633,  -0.500, -54.944] as [number, number, number],
-  'back-left':   [ 38.284, -26.000, 122.020] as [number, number, number],
+  'back-left':   [ 38.284,  -0.500, 122.020] as [number, number, number],
   'back-right':  [126.553,  -0.500,  41.481] as [number, number, number],
 }
 

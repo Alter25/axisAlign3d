@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group } from 'three'
 import type { AlignmentCorrection } from '@/shared/types/alignment'
-import { PATA_POSITIONS, DIRECTION_OFFSETS, PRIORITY_COLORS, AXIS_POINTS } from '@/shared/lib/constants'
+import { PATA_POSITIONS, DIRECTION_OFFSETS, PRIORITY_COLORS, AXIS_POINTS, AXIAL_ARROW_POSITION } from '@/shared/lib/constants'
 import type { AxisPoints } from '../../dev/ArrowEditor'
 
 const PATA_KEYS = new Set(Object.keys(PATA_POSITIONS))
@@ -69,7 +69,7 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
   const { xDir, yDir, zDir, center } = useMemo(() => computeAxisVectors(axisPoints), [axisPoints])
 
   const position: [number, number, number] = useMemo(() => {
-    const couplingCenter: [number, number, number] = axialPosition ?? [center.x, center.y, center.z]
+    const couplingCenter: [number, number, number] = axialPosition ?? AXIAL_ARROW_POSITION
     const base = (correction.direction === 'axial' || correction.location === 'shaft')
       ? couplingCenter
       : (positions[correction.location as keyof typeof PATA_POSITIONS] ?? [0, 0, 0])

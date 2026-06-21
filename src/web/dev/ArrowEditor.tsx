@@ -354,6 +354,13 @@ export function ArrowEditor({ state, onChange }: ArrowEditorProps) {
           <Vec3Input label={<><span className="inline-block w-2 h-2 rounded-sm bg-[#ff4444] mr-1.5" />X₁</>} value={state.axisPoints.x1} onChange={v => setAxisPoint('x1', v)} />
           <Vec3Input label={<><span className="inline-block w-2 h-2 rounded-sm bg-[#ff4444] mr-1.5" />X₂</>} value={state.axisPoints.x2} onChange={v => setAxisPoint('x2', v)} />
           <Vec3Input label={<><span className="inline-block w-2 h-2 rounded-full bg-[#dd44ff] mr-1.5" />Z</>}  value={state.axisPoints.z}  onChange={v => setAxisPoint('z',  v)} />
+          <div className="my-1 border-t border-slate-700" />
+          <p className="text-[9px] text-slate-600">X = eje shaft · Y = vertical · Z = lateral</p>
+          <Vec3Input
+            label={<><span className="inline-block w-2 h-2 rounded-full bg-[#f97316] mr-1.5" />Acople</>}
+            value={worldPtToLocal(state.axialPosition, frame)}
+            onChange={v => onChange({ ...state, axialPosition: localPtToWorld(v, frame) })}
+          />
         </div>
         <div className="flex items-center gap-3">
           <span className="w-28 shrink-0 text-right text-xs text-slate-400">Tamaño marcadores</span>
