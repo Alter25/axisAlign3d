@@ -1,23 +1,9 @@
-// Umbrales ISO 10816 para vibración en mm/s (clase II: equipos medianos)
-export const ISO_10816_THRESHOLDS = {
-  zone_a: 2.3,  // máquinas nuevas
-  zone_b: 4.5,  // operación sin restricción
-  zone_c: 7.1,  // operación limitada — programa mantenimiento
-  zone_d: 11.0, // zona de daño — detener equipo
-} as const
-
 // Umbrales de runout (micrones)
 export const RUNOUT_THRESHOLDS = {
   axial_warning: 50,   // micrones
   axial_critical: 100,
   radial_warning: 30,
   radial_critical: 75,
-} as const
-
-// Umbrales de temperatura en rodamientos (°C)
-export const TEMP_THRESHOLDS = {
-  warning: 80,
-  critical: 95,
 } as const
 
 // Eje del equipo — puntos calibrados en modo DEV

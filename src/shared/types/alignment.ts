@@ -8,15 +8,10 @@ export interface RunoutReadings {
 
 // Datos capturados desde el formulario de lectura
 export interface ReadingData {
-  verticalVibration?: number;   // mm/s (opcional — prealineación rápida)
-  horizontalVibration?: number; // mm/s (opcional — prealineación rápida)
-  verticalPhase?: number;       // 0-360 grados (opcional)
-  horizontalPhase?: number;     // 0-360 grados (opcional)
   runoutAxial: number;          // TIR en µm
   runoutRadial: number;         // TIR en µm
   runoutAxialReadings?: RunoutReadings   // lecturas individuales para corrección direccional
   runoutRadialReadings?: RunoutReadings
-  bearingTemperature?: number;  // °C (opcional)
 }
 
 // Las 4 patas del motor (nombradas desde el frente del equipo, mirando al acople)
