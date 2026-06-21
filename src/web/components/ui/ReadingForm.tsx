@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReadingData } from '@/shared/types/alignment'
-import { DialIndicator, computeTIR, EMPTY_DIAL_READINGS } from './DialIndicator'
-import type { DialReadings } from './DialIndicator'
+import { DialIndicator, computeTIR, tirToMicrons, EMPTY_DIAL_READINGS } from './DialIndicator'
+import type { DialReadings, DialUnit } from './DialIndicator'
 
 interface ReadingFormProps {
   onSubmit: (data: ReadingData) => void
@@ -79,6 +79,7 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
   const [fields, setFields] = useState<FieldState>(empty)
   const [errors, setErrors] = useState<FormErrors>({})
   const [showVibration, setShowVibration] = useState(false)
+  const [unit, setUnit] = useState<DialUnit>('centesimas')
 
   function set(key: keyof Omit<FieldState, 'dialAxial' | 'dialRadial'>, value: string) {
     setFields(prev => ({ ...prev, [key]: value }))
@@ -126,8 +127,8 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     if (!validate()) return
 
     const data: ReadingData = {
-      runoutAxial: computeTIR(fields.dialAxial)!,
-      runoutRadial: computeTIR(fields.dialRadial)!,
+      runoutAxial: tirToMicrons(computeTIR(fields.dialAxial)!, unit),
+      runoutRadial: tirToMicrons(computeTIR(fields.dialRadial)!, unit),
       verticalVibration: showVibration ? parseOptional(fields.verticalVibration) : undefined,
       horizontalVibration: showVibration ? parseOptional(fields.horizontalVibration) : undefined,
       verticalPhase: showVibration ? parseOptional(fields.verticalPhase) : undefined,
@@ -148,9 +149,25 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
 
       {/* ── RUNOUT (siempre visible) ── */}
       <section className="flex flex-col gap-5">
+        {/* Encabezado + toggle de unidades */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+            Runout — Reloj Comparador
+          </p>
+          <button
+            type="button"
+            onClick={() => setUnit(u => u === 'centesimas' ? 'miles' : 'centesimas')}
+            className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-mono text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+            title={unit === 'centesimas' ? 'Cambiar a milésimas de pulgada' : 'Cambiar a centésimas de mm'}
+          >
+            {unit === 'centesimas' ? '0.01 mm  →  0.001″' : '0.001″  →  0.01 mm'}
+          </button>
+        </div>
+
         <DialIndicator
-          label="Runout Axial — cara del acople"
+          label="Axial — cara del acople"
           type="axial"
+          unit={unit}
           readings={fields.dialAxial}
           onChange={(pos, val) => {
             setFields(prev => ({ ...prev, dialAxial: { ...prev.dialAxial, [pos]: val } }))
@@ -160,8 +177,9 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
         />
 
         <DialIndicator
-          label="Runout Radial — diámetro del acople"
+          label="Radial — diámetro del acople"
           type="radial"
+          unit={unit}
           readings={fields.dialRadial}
           onChange={(pos, val) => {
             setFields(prev => ({ ...prev, dialRadial: { ...prev.dialRadial, [pos]: val } }))

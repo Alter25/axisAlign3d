@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 export type DialPosition = '12h' | '3h' | '6h' | '9h'
 export type DialReadings = Record<DialPosition, string>
+export type DialUnit = 'centesimas' | 'miles'
 
 export const EMPTY_DIAL_READINGS: DialReadings = { '12h': '', '3h': '', '6h': '', '9h': '' }
 
@@ -14,9 +15,33 @@ export function computeTIR(readings: DialReadings): number | null {
   return Math.max(...vals) - Math.min(...vals)
 }
 
-const THRESHOLDS = {
-  axial:  { warn: 50,  crit: 100 },
-  radial: { warn: 30,  crit: 75  },
+// Convert TIR (in display units) to µm for the calculation engine
+export function tirToMicrons(tir: number, unit: DialUnit): number {
+  return unit === 'centesimas' ? tir * 10 : tir * 25.4
+}
+
+const UNIT_LABEL: Record<DialUnit, string> = {
+  centesimas: '¢',    // centésimas de mm (0.01 mm)
+  miles:      'mil',  // milésimas de pulgada (0.001")
+}
+
+const UNIT_DECIMALS: Record<DialUnit, number> = {
+  centesimas: 1,
+  miles:      2,
+}
+
+// Thresholds in each display unit
+// Axial: 50 µm = 5 ¢mm | ≈ 2.0 mil  /  100 µm = 10 ¢mm | ≈ 4.0 mil
+// Radial: 30 µm = 3 ¢mm | ≈ 1.2 mil  /   75 µm = 7.5 ¢mm | ≈ 3.0 mil
+const THRESHOLDS: Record<'axial' | 'radial', Record<DialUnit, { warn: number; crit: number }>> = {
+  axial: {
+    centesimas: { warn: 5,   crit: 10  },
+    miles:      { warn: 2.0, crit: 4.0 },
+  },
+  radial: {
+    centesimas: { warn: 3,   crit: 7.5 },
+    miles:      { warn: 1.2, crit: 3.0 },
+  },
 }
 
 const POS_COLORS: Record<DialPosition, string> = {
@@ -26,7 +51,6 @@ const POS_COLORS: Record<DialPosition, string> = {
   '9h':  '#a855f7',
 }
 
-// degrees from top (clockwise) for each clock position
 const POS_DOT_DEG: Record<DialPosition, number> = { '12h': 0, '3h': 90, '6h': 180, '9h': 270 }
 
 const CX = 90, CY = 90
@@ -34,16 +58,19 @@ const CX = 90, CY = 90
 interface DialIndicatorProps {
   label: string
   type: 'axial' | 'radial'
+  unit: DialUnit
   readings: DialReadings
   onChange: (pos: DialPosition, val: string) => void
   error?: string
 }
 
-export function DialIndicator({ label, type, readings, onChange, error }: DialIndicatorProps) {
+export function DialIndicator({ label, type, unit, readings, onChange, error }: DialIndicatorProps) {
   const [selected, setSelected] = useState<DialPosition>('12h')
 
   const tir = computeTIR(readings)
-  const { warn, crit } = THRESHOLDS[type]
+  const { warn, crit } = THRESHOLDS[type][unit]
+  const decimals = UNIT_DECIMALS[unit]
+  const unitLabel = UNIT_LABEL[unit]
 
   let tirLabel = '', tirBg = ''
   if (tir !== null) {
@@ -54,7 +81,6 @@ export function DialIndicator({ label, type, readings, onChange, error }: DialIn
 
   const selVal = readings[selected].trim()
   const selNum = selVal !== '' && !isNaN(Number(selVal)) ? Number(selVal) : null
-  // one full revolution = 100 units; value maps to 0-360° rotation from 12h
   const needleRot = selNum !== null ? ((selNum % 100 + 100) % 100) * 3.6 : null
 
   return (
@@ -100,7 +126,7 @@ export function DialIndicator({ label, type, readings, onChange, error }: DialIn
             )
           })}
 
-          {/* Position dots — clickable, show which positions have readings */}
+          {/* Position dots — clickable */}
           {(Object.entries(POS_DOT_DEG) as [DialPosition, number][]).map(([pos, deg]) => {
             const rad = (deg - 90) * Math.PI / 180
             const hasVal = readings[pos].trim() !== ''
@@ -119,7 +145,7 @@ export function DialIndicator({ label, type, readings, onChange, error }: DialIn
             )
           })}
 
-          {/* Needle — rotated around center */}
+          {/* Needle */}
           {needleRot !== null && (
             <g transform={`rotate(${needleRot}, ${CX}, ${CY})`}>
               <line
@@ -136,12 +162,12 @@ export function DialIndicator({ label, type, readings, onChange, error }: DialIn
           {/* Center cap */}
           <circle cx={CX} cy={CY} r={5} fill="#0f172a" />
 
-          {/* Numeric readout — shown in the lower-center zone of the face */}
+          {/* Numeric readout */}
           <text
             x={CX} y={CY + 24}
             textAnchor="middle" fontSize="8.5" fontFamily="monospace" fill="#475569"
           >
-            {selNum !== null ? `${selNum.toFixed(1)} µm` : '– – –'}
+            {selNum !== null ? `${selNum.toFixed(decimals)} ${unitLabel}` : '– – –'}
           </text>
           <text
             x={CX} y={CY + 34}
@@ -152,7 +178,7 @@ export function DialIndicator({ label, type, readings, onChange, error }: DialIn
         </svg>
       </div>
 
-      {/* 4 position inputs in a row */}
+      {/* 4 position inputs */}
       <div className="grid grid-cols-4 gap-1.5">
         {(['12h', '3h', '6h', '9h'] as DialPosition[]).map(pos => (
           <PositionInput
@@ -171,7 +197,9 @@ export function DialIndicator({ label, type, readings, onChange, error }: DialIn
         <span className="text-xs font-semibold text-slate-600">TIR</span>
         {tir !== null ? (
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-bold text-slate-800">{tir.toFixed(0)} µm</span>
+            <span className="font-mono text-sm font-bold text-slate-800">
+              {tir.toFixed(decimals)} {unitLabel}
+            </span>
             <span
               className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
               style={{ backgroundColor: tirBg }}
