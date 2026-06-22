@@ -14,8 +14,8 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   // ── Runout axial (cara del acople) ────────────────────────────────────────
   // La cara del acople es una superficie plana → las 4 lecturas del reloj determinan
   // el plano de error angular. Con 12h=0 de referencia:
-  //   • Error angular vertical:    r6  (skill paso 5: positivo → calzar patas traseras)
-  //   • Error angular horizontal:  r9 - r3  (skill paso 7: positivo → mover patas traseras a la derecha)
+  //   • Error angular vertical:    r6  (positivo → calzar patas DELANTERAS)
+  //   • Error angular horizontal:  r9 - r3  (positivo → mover patas traseras a la derecha)
   const tirAxial = reading.runoutAxial
   const pAxial = runoutPriority(tirAxial, RUNOUT_THRESHOLDS.axial_warning, RUNOUT_THRESHOLDS.axial_critical)
   if (pAxial !== null) {
@@ -26,15 +26,18 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
       const DEAD_BAND = 5  // µm — ignorar errores menores al ruido de medición
 
       // ── Error angular en plano vertical (12h / 6h) ──
+      // Convención: r6 > 0 → mayor distancia/apertura en 6h (parte inferior) →
+      //   frente del motor está bajo → calzar patas DELANTERAS (agregar calzas).
+      // r6 < 0 → apertura en parte superior → trasera baja → calzar patas TRASERAS.
       if (Math.abs(r6) > DEAD_BAND) {
         const patas: PataLocation[] = r6 > 0
-          ? ['back-left', 'back-right']    // r6 > 0: cara cierra abajo → calzar patas traseras
-          : ['front-left', 'front-right']  // r6 < 0: cara cierra arriba → calzar patas delanteras
-        const shimLabel = r6 > 0 ? 'patas traseras' : 'patas delanteras'
+          ? ['front-left', 'front-right']  // frente bajo → calzar delanteras
+          : ['back-left', 'back-right']    // trasera baja → calzar traseras
+        const shimLabel = r6 > 0 ? 'patas delanteras' : 'patas traseras'
         patas.forEach(loc => corrections.push({
-          id: `axial-v-${loc}`, location: loc, direction: 'vertical', side: 'bottom',
+          id: `axial-v-${loc}`, location: loc, direction: 'vertical', side: 'top',
           magnitude: Math.abs(r6), unit: 'µm', priority: pAxial,
-          description: `Runout axial ${urgencyAxial}: calzar ${shimLabel} — error angular vertical ${r6.toFixed(0)} µm (cara acople)`,
+          description: `Runout axial ${urgencyAxial}: calzar ${shimLabel} — agregar calzas ${Math.abs(r6).toFixed(0)} µm`,
         }))
       }
 
@@ -76,29 +79,31 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   const pRadial = runoutPriority(tirRadial, RUNOUT_THRESHOLDS.radial_warning, RUNOUT_THRESHOLDS.radial_critical)
   if (pRadial !== null) {
     const urgencyRadial = pRadial === 1 ? 'CRÍTICO' : pRadial === 2 ? 'elevado' : 'leve'
+    // El movimiento radial es EQUITATIVO: las 4 patas se mueven igual.
+    // La magnitud de corrección es SIEMPRE LA MITAD del TIR indicado por el reloj.
+    const halfTir = tirRadial / 2
 
-    if (reading.runoutRadialReadings) {
-      const { r6, r3, r9 } = reading.runoutRadialReadings as RunoutReadings
-      // Componente vertical: r6 negativo → centro desplazado hacia arriba → flecha hacia arriba
-      const vComp = -r6  // si r6 < 0, vComp > 0 → flecha top (hacia donde está el centro)
-      const hComp = r3 - r9  // positivo → centro hacia 3h → flecha derecha
+    const { r6, r3, r9 } = reading.runoutRadialReadings as RunoutReadings
+    // r6 > 0 → centro desplazado hacia arriba → mover motor hacia abajo
+    const vComp = -r6
+    // r3 > r9 → centro desplazado hacia 3h (derecha) → mover motor a la derecha
+    const hComp = r3 - r9
 
-      const side = Math.abs(vComp) >= Math.abs(hComp)
-        ? (vComp >= 0 ? 'top' : 'bottom')
-        : (hComp >= 0 ? 'right' : 'left')
+    const isVertical = Math.abs(vComp) >= Math.abs(hComp)
+    const side = isVertical
+      ? (vComp >= 0 ? 'top' : 'bottom')
+      : (hComp >= 0 ? 'right' : 'left')
+    const direction = isVertical ? 'vertical' : 'horizontal'
+    const moveLabel: Record<string, string> = { top: 'arriba', bottom: 'abajo', left: 'izquierda', right: 'derecha' }
 
+    const allPatas: PataLocation[] = ['front-left', 'front-right', 'back-left', 'back-right']
+    allPatas.forEach(loc => {
       corrections.push({
-        id: 'radial-ecc', location: 'shaft', direction: 'vertical', side,
-        magnitude: tirRadial, unit: 'µm', priority: pRadial,
-        description: `Runout radial ${urgencyRadial}: ${tirRadial.toFixed(0)} µm — excentricidad del acople. Verificar concentricidad en el eje.`,
+        id: `radial-${loc}`, location: loc, direction, side,
+        magnitude: halfTir, unit: 'µm', priority: pRadial,
+        description: `Runout radial ${urgencyRadial}: mover motor hacia ${moveLabel[side]} — ${halfTir.toFixed(0)} µm equitativo en las 4 patas`,
       })
-    } else {
-      corrections.push({
-        id: 'radial-generic', location: 'shaft', direction: 'vertical', side: 'top',
-        magnitude: tirRadial, unit: 'µm', priority: pRadial,
-        description: `Runout radial ${urgencyRadial}: ${tirRadial.toFixed(0)} µm — verificar concentricidad del acople.`,
-      })
-    }
+    })
   }
 
   return corrections.sort((a, b) => a.priority - b.priority)
