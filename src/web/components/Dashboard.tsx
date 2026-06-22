@@ -10,6 +10,7 @@ import type { ArrowEditorState } from '../dev/ArrowEditor'
 import type { ViewPreset } from '../dev/AxisMarkers'
 import type { AlignmentCorrection } from '@/shared/types/alignment'
 import { PATA_POSITIONS, DIRECTION_OFFSETS, PRIORITY_COLORS } from '@/shared/lib/constants'
+import { Tutorial, isTutorialSeen } from './ui/Tutorial'
 
 const IS_DEV = import.meta.env.DEV
 const DEV_STORAGE_KEY = 'axisAlign3d:devEditor'
@@ -97,6 +98,7 @@ export function Dashboard() {
   const [viewPreset, setViewPreset]   = useState<ViewPreset>('free')
   const [editorState, setEditorState] = useState<ArrowEditorState>(loadEditorState)
   const [isMobile, setIsMobile]       = useState(() => window.matchMedia('(max-width: 1023px)').matches)
+  const [showTutorial, setShowTutorial] = useState(() => !isTutorialSeen())
 
   useEffect(() => {
     try { localStorage.setItem(DEV_STORAGE_KEY, JSON.stringify(editorState)) } catch {}
@@ -134,7 +136,20 @@ export function Dashboard() {
   }
 
   return (
+    <>
+    {showTutorial && <Tutorial onClose={() => setShowTutorial(false)} />}
     <div className="flex flex-col gap-4 p-4 lg:grid lg:grid-cols-3">
+      {/* Header */}
+      <div className="order-0 flex items-center justify-between lg:col-span-3">
+        <span className="text-sm font-bold tracking-wide text-slate-700">AxisAlign 3D</span>
+        <button
+          onClick={() => setShowTutorial(true)}
+          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-700"
+        >
+          ? Ayuda
+        </button>
+      </div>
+
       {/* Escena 3D */}
       <div
         className="relative order-1 h-[420px] overflow-hidden rounded-xl border border-slate-200 bg-slate-900 shadow-sm lg:order-2 lg:col-span-2 lg:h-auto lg:min-h-[420px]"
@@ -245,5 +260,6 @@ export function Dashboard() {
         </div>
       )}
     </div>
+    </>
   )
 }
