@@ -32,10 +32,13 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     const hasFilled = (d: DialReadings) =>
       (['12h', '3h', '6h', '9h'] as DialPosition[]).some(p => d[p].trim() !== '' && !isNaN(Number(d[p])))
 
-    if (!hasFilled(fields.dialAxial))
-      next.dialAxial = 'Ingresa al menos una lectura'
-    if (!hasFilled(fields.dialRadial))
-      next.dialRadial = 'Ingresa al menos una lectura'
+    const axialFilled  = hasFilled(fields.dialAxial)
+    const radialFilled = hasFilled(fields.dialRadial)
+
+    if (!axialFilled && !radialFilled) {
+      next.dialAxial  = 'Ingresa lecturas en al menos uno de los dos relojes'
+      next.dialRadial = 'Ingresa lecturas en al menos uno de los dos relojes'
+    }
 
     setErrors(next)
     return Object.keys(next).length === 0

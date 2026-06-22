@@ -40,13 +40,16 @@ export function getReadingsInMicrons(
 
 // Geometric constraint for a flat plane or concentric cylinder:
 // 12h + 6h = 3h + 9h  →  deviation should be 0
+// Empty fields treated as 0 (same as computeTIR). Requires at least 2 non-zero
+// values to avoid trivially triggering on a single partial entry.
 function planeConsistencyDeviation(readings: DialReadings): number | null {
-  const parse = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n }
+  const parse = (v: string) => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
   const r12 = parse(readings['12h'])
   const r3  = parse(readings['3h'])
   const r6  = parse(readings['6h'])
   const r9  = parse(readings['9h'])
-  if (r12 === null || r3 === null || r6 === null || r9 === null) return null
+  const nonZeroCount = [r12, r3, r6, r9].filter(v => v !== 0).length
+  if (nonZeroCount < 2) return null
   return Math.abs((r12 + r6) - (r3 + r9))
 }
 
@@ -104,6 +107,7 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
   const consistency = planeConsistencyDeviation(readings)
   const consistencyTolerance = unit === 'centesimas' ? 1.0 : 0.5
   const anyFilled = (['12h', '3h', '6h', '9h'] as DialPosition[]).some(p => readings[p].trim() !== '')
+  const allFilled = (['12h', '3h', '6h', '9h'] as DialPosition[]).every(p => readings[p].trim() !== '')
 
   let tirLabel = '', tirBg = ''
   if (tir < warn)      { tirLabel = 'BIEN';    tirBg = '#22c55e' }
@@ -118,9 +122,33 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
     <div className="flex flex-col gap-2">
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{label}</p>
 
-      {/* SVG Dial */}
-      <div className="mx-auto" style={{ width: '100%', maxWidth: 180, aspectRatio: '1/1' }}>
-        <svg viewBox="0 0 180 180" className="w-full h-full">
+      {/* Dial + inputs around clock positions — 3×3 grid */}
+      <div
+        className="mx-auto"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'min-content 160px min-content',
+          gridTemplateRows: 'min-content 160px min-content',
+          gap: 6,
+        }}
+      >
+        {/* ── Row 0 ── */}
+        <div />
+        <div className="flex justify-center items-end">
+          <div style={{ width: 58 }}>
+            <PositionInput pos="12h" value={readings['12h']} isSelected={selected === '12h'} onSelect={setSelected} onChange={onChange} />
+          </div>
+        </div>
+        <div />
+
+        {/* ── Row 1 ── */}
+        <div className="flex items-center justify-end">
+          <div style={{ width: 58 }}>
+            <PositionInput pos="9h" value={readings['9h']} isSelected={selected === '9h'} onSelect={setSelected} onChange={onChange} />
+          </div>
+        </div>
+
+        <svg viewBox="0 0 180 180" style={{ width: '100%', height: '100%', display: 'block' }}>
           {/* Bezel */}
           <circle cx={CX} cy={CY} r={88} fill="#1e293b" />
           {/* Face */}
@@ -207,20 +235,21 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
             {selected}
           </text>
         </svg>
-      </div>
 
-      {/* 4 position inputs */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {(['12h', '3h', '6h', '9h'] as DialPosition[]).map(pos => (
-          <PositionInput
-            key={pos}
-            pos={pos}
-            value={readings[pos]}
-            isSelected={pos === selected}
-            onSelect={setSelected}
-            onChange={onChange}
-          />
-        ))}
+        <div className="flex items-center justify-start">
+          <div style={{ width: 58 }}>
+            <PositionInput pos="3h" value={readings['3h']} isSelected={selected === '3h'} onSelect={setSelected} onChange={onChange} />
+          </div>
+        </div>
+
+        {/* ── Row 2 ── */}
+        <div />
+        <div className="flex justify-center items-start">
+          <div style={{ width: 58 }}>
+            <PositionInput pos="6h" value={readings['6h']} isSelected={selected === '6h'} onSelect={setSelected} onChange={onChange} />
+          </div>
+        </div>
+        <div />
       </div>
 
       {/* TIR result bar */}
@@ -245,15 +274,22 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
 
       {/* Geometric consistency check: 12h + 6h must equal 3h + 9h */}
       {consistency !== null && (
-        <div className={`flex items-center gap-1.5 rounded border px-2 py-1 text-[10px] font-mono ${
+        <div className={`flex flex-col gap-0.5 rounded border px-2 py-1 text-[10px] font-mono ${
           consistency <= consistencyTolerance
             ? 'border-green-200 bg-green-50 text-green-700'
-            : 'border-amber-200 bg-amber-50 text-amber-700'
+            : 'border-red-200 bg-red-50 text-red-700'
         }`}>
-          {consistency <= consistencyTolerance
-            ? '✓ Plano consistente  (12h + 6h = 3h + 9h)'
-            : `⚠ Inconsistencia: ${consistency.toFixed(decimals)} ${unitLabel}  (12h + 6h ≠ 3h + 9h)`
-          }
+          <span>
+            {consistency <= consistencyTolerance
+              ? '✓ Plano consistente  (12h + 6h = 3h + 9h)'
+              : `⚠ Lecturas incoherentes: Δ${consistency.toFixed(decimals)} ${unitLabel}  (12h + 6h ≠ 3h + 9h)`
+            }
+          </span>
+          {!allFilled && consistency > consistencyTolerance && (
+            <span className="opacity-70">
+              Posible error de medición, reloj mal colocado o deformidad del acople.
+            </span>
+          )}
         </div>
       )}
 
