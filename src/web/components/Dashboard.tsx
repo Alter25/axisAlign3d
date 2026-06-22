@@ -96,10 +96,19 @@ export function Dashboard() {
   const [autoRotate, setAutoRotate]   = useState(true)
   const [viewPreset, setViewPreset]   = useState<ViewPreset>('free')
   const [editorState, setEditorState] = useState<ArrowEditorState>(loadEditorState)
+  const [isMobile, setIsMobile]       = useState(() => window.innerWidth < 1024)
 
   useEffect(() => {
     try { localStorage.setItem(DEV_STORAGE_KEY, JSON.stringify(editorState)) } catch {}
   }, [editorState])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)')
+    setIsMobile(mq.matches)
+    const h = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [])
 
   const activeCorrections = devMode
     ? DEV_CORRECTIONS.filter(c => editorState.visibleArrows[c.id] !== false)
@@ -146,6 +155,7 @@ export function Dashboard() {
           axialPosition={editorState.axialPosition}
           onAxialPositionChange={devMode ? handleAxialPositionChange : undefined}
           viewPreset={viewPreset}
+          isMobile={isMobile}
         />
 
         {/* Labels 2D — esquina superior izquierda */}
