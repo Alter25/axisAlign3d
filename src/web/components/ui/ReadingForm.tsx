@@ -12,11 +12,19 @@ interface FieldState {
   dialRadial: DialReadings
 }
 
+interface GeometryState {
+  D:  string   // Ø acople (mm)
+  dF: string   // dist. acople → patas del. (mm)
+  dB: string   // dist. acople → patas tras. (mm)
+}
+
 interface FormErrors {
   dialAxial?: string
   dialRadial?: string
   form?: string
 }
+
+const emptyGeometry: GeometryState = { D: '', dF: '', dB: '' }
 
 const empty: FieldState = {
   dialAxial: EMPTY_DIAL_READINGS,
@@ -24,9 +32,10 @@ const empty: FieldState = {
 }
 
 export function ReadingForm({ onSubmit }: ReadingFormProps) {
-  const [fields, setFields] = useState<FieldState>(empty)
-  const [errors, setErrors] = useState<FormErrors>({})
-  const [unit, setUnit] = useState<DialUnit>('centesimas')
+  const [fields,   setFields]   = useState<FieldState>(empty)
+  const [geometry, setGeometry] = useState<GeometryState>(emptyGeometry)
+  const [errors,   setErrors]   = useState<FormErrors>({})
+  const [unit,     setUnit]     = useState<DialUnit>('centesimas')
 
   function validate(): boolean {
     const next: FormErrors = {}
@@ -47,18 +56,29 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     e.preventDefault()
     if (!validate()) return
 
+    const D  = parseFloat(geometry.D)
+    const dF = parseFloat(geometry.dF)
+    const dB = parseFloat(geometry.dB)
+    const hasGeometry = D > 0 && dF > 0 && dB > 0 && dF < dB
+
     const data: ReadingData = {
       runoutAxial:          tirToMicrons(computeTIR(fields.dialAxial),  unit),
       runoutRadial:         tirToMicrons(computeTIR(fields.dialRadial), unit),
       runoutAxialReadings:  getReadingsInMicrons(fields.dialAxial,  unit),
       runoutRadialReadings: getReadingsInMicrons(fields.dialRadial, unit),
+      geometry: hasGeometry ? { D, dF, dB } : undefined,
     }
     onSubmit(data)
   }
 
   function handleReset() {
     setFields(empty)
+    setGeometry(emptyGeometry)
     setErrors({})
+  }
+
+  function setGeo(key: keyof GeometryState, val: string) {
+    setGeometry(prev => ({ ...prev, [key]: val }))
   }
 
   return (
@@ -103,6 +123,50 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
         }}
         error={errors.dialRadial}
       />
+
+      {/* ── Geometría del equipo ── */}
+      <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+          Geometría del equipo
+          <span className="ml-1.5 font-normal normal-case tracking-normal text-slate-400">
+            (para correcciones axiales precisas)
+          </span>
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { key: 'D',  label: 'Ø acople',      title: 'Diámetro del acople (donde toca el reloj axial)' },
+            { key: 'dF', label: 'Dist. del.',     title: 'Distancia cara del acople → patas delanteras' },
+            { key: 'dB', label: 'Dist. tras.',    title: 'Distancia cara del acople → patas traseras' },
+          ] as const).map(({ key, label, title }) => (
+            <div key={key} className="flex flex-col gap-0.5" title={title}>
+              <span className="text-[9px] font-semibold text-slate-500">{label}</span>
+              <div className="flex items-center gap-0.5">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={geometry[key]}
+                  placeholder="—"
+                  onChange={e => setGeo(key, e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-center text-xs font-mono text-slate-800 outline-none
+                    focus:border-slate-500"
+                />
+                <span className="shrink-0 text-[9px] text-slate-400">mm</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        {(() => {
+          const D  = parseFloat(geometry.D)
+          const dF = parseFloat(geometry.dF)
+          const dB = parseFloat(geometry.dB)
+          if (D > 0 && dF > 0 && dB > 0 && dF >= dB)
+            return <p className="text-[10px] text-amber-600">⚠ Dist. traseras debe ser mayor que delantera</p>
+          if (D > 0 && dF > 0 && dB > dF)
+            return <p className="text-[10px] text-green-600">✓ Geometría completa — cálculo preciso</p>
+          return null
+        })()}
+      </div>
 
       {errors.form && (
         <p className="text-xs text-red-500">{errors.form}</p>

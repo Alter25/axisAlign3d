@@ -17,7 +17,7 @@ function maxPriority(a: 1 | 2 | 3 | null, b: 1 | 2 | 3 | null): 1 | 2 | 3 {
 }
 
 function urgency(p: 1 | 2 | 3): string {
-  return p === 1 ? 'CRÍTICO' : p === 2 ? 'elevado' : 'leve'
+  return p === 1 ? 'CRITICO' : p === 2 ? 'elevado' : 'leve'
 }
 
 export function calculateCorrections(reading: ReadingData): AlignmentCorrection[] {
@@ -27,9 +27,9 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   const tirAxial = reading.runoutAxial
   const pAxial   = runoutPriority(tirAxial, RUNOUT_THRESHOLDS.axial_warning, RUNOUT_THRESHOLDS.axial_critical)
   const axR      = reading.runoutAxialReadings as RunoutReadings | undefined
-  // r6 > 0 → mayor distancia en 6h → calzar patas DELANTERAS (raise front)
+  // r6 > 0 => mayor distancia en 6h => calzar patas DELANTERAS (raise front)
   const ax_r6    = axR ? (axR.r6  ?? 0) : 0
-  // ax_hErr = r9 - r3 > 0 → patas traseras a la derecha
+  // ax_hErr = r9 - r3 > 0 => patas traseras a la derecha
   const ax_hErr  = axR ? ((axR.r9 ?? 0) - (axR.r3 ?? 0)) : 0
 
   // ── Lecturas radiales ─────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   const pRadial   = runoutPriority(tirRadial, RUNOUT_THRESHOLDS.radial_warning, RUNOUT_THRESHOLDS.radial_critical)
   const rdR       = reading.runoutRadialReadings as RunoutReadings | undefined
 
-  // vComp = −r6 > 0 → necesita subir motor; hComp = r3−r9 > 0 → mover a la derecha
+  // vComp = -r6 > 0 => necesita subir motor; hComp = r3-r9 > 0 => mover a la derecha
   const rd_vComp  = rdR ? -rdR.r6 : 0
   const rd_hComp  = rdR ? ((rdR.r3 ?? 0) - (rdR.r9 ?? 0)) : 0
   const rdIncoherent = rdR
@@ -51,7 +51,7 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
     corrections.push({
       id: 'radial-incoherencia', location: 'shaft', direction: 'axial', side: 'front',
       magnitude: tirRadial, unit: 'µm', priority: pRadial,
-      description: `Runout radial ${urgency(pRadial)}: ⚠ lecturas incoherentes — TIR ${tirRadial.toFixed(0)} µm sin dirección determinable (12h+6h ≠ 3h+9h, Δ=${consistency.toFixed(0)} µm). Verificar colocación del reloj, deformidad del acople o error de medición.`,
+      description: `Runout radial ${urgency(pRadial)}: lecturas incoherentes — TIR ${tirRadial.toFixed(0)} um sin direction determinable (12h+6h != 3h+9h, D=${consistency.toFixed(0)} um). Verificar colocacion del reloj, deformidad del acople o error de medicion.`,
     })
   }
 
@@ -60,22 +60,40 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
     corrections.push({
       id: 'axial-generic', location: 'shaft', direction: 'axial', side: 'front',
       magnitude: tirAxial, unit: 'µm', priority: pAxial,
-      description: `Runout axial ${urgency(pAxial)}: ${tirAxial.toFixed(0)} µm — revisar cara del acople y fijación axial.`,
+      description: `Runout axial ${urgency(pAxial)}: ${tirAxial.toFixed(0)} um — revisar cara del acople y fijacion axial.`,
     })
   }
 
+  // ── Factores de geometria ─────────────────────────────────────────────────
+  // Correccion axial exacta (Rim & Face):
+  //   C_front = radV + ax_r6 * dF/D
+  //   C_back  = radV + ax_r6 * dB/D
+  //
+  // Ambos pares reciben la componente angular, proporcional a su distancia al acople.
+  // Sin geometria: aproximacion — solo un par recibe la correccion axial.
+  const geo = reading.geometry
+  const hasGeo = !!(geo && geo.D > 0 && geo.dF > 0 && geo.dB > geo.dF)
+  const factorF = hasGeo ? geo!.dF / geo!.D : null   // dF/D
+  const factorB = hasGeo ? geo!.dB / geo!.D : null   // dB/D
+
   // ── Correcciones verticales combinadas ────────────────────────────────────
-  // Radial contribuye igual a las 4 patas: rd_vComp/2 (signo: + = subir)
-  // Axial contribuye diferencialmente:
-  //   ax_r6 > 0 → front += ax_r6 (solo patas delanteras suben)
-  //   ax_r6 < 0 → back  += |ax_r6| (solo patas traseras suben)
   const hasRadialV = pRadial !== null && rdR && !rdIncoherent && Math.abs(rd_vComp) > DEAD
   const hasAxialV  = pAxial  !== null && axR  && Math.abs(ax_r6)   > DEAD
 
   if (hasRadialV || hasAxialV) {
-    const radV     = hasRadialV ? rd_vComp / 2 : 0
-    const axFrontV = hasAxialV  ? (ax_r6 > 0 ? ax_r6 : 0) : 0
-    const axBackV  = hasAxialV  ? (ax_r6 < 0 ? -ax_r6 : 0) : 0
+    const radV = hasRadialV ? rd_vComp / 2 : 0
+
+    // Contribucion axial a cada par segun geometria
+    let axFrontV: number, axBackV: number
+    if (hasAxialV && hasGeo) {
+      axFrontV = ax_r6 * factorF!   // escalado por dF/D
+      axBackV  = ax_r6 * factorB!   // escalado por dB/D
+    } else if (hasAxialV) {
+      axFrontV = ax_r6 > 0 ? ax_r6 : 0   // aprox: solo el par que sube
+      axBackV  = ax_r6 < 0 ? -ax_r6 : 0
+    } else {
+      axFrontV = 0; axBackV = 0
+    }
 
     const frontNet = radV + axFrontV
     const backNet  = radV + axBackV
@@ -87,29 +105,30 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
       const action = net > 0 ? 'agregar calzas' : 'quitar calzas'
       const label  = isFront ? 'patas delanteras' : 'patas traseras'
       const axPart = isFront ? axFrontV : axBackV
+      const factor = isFront ? factorF : factorB
 
       let src: string
-      if (hasRadialV && hasAxialV && Math.abs(axPart) > DEAD) {
-        // Ambas fuentes contribuyen — mostrar desglose
-        const signR = radV > 0 ? '↑' : '↓'
-        const signA = axPart > 0 ? '↑' : '↓'
-        src = ` (radial ${signR}${Math.abs(radV).toFixed(0)} µm + axial ${signA}${axPart.toFixed(0)} µm)`
-      } else if (hasRadialV && hasAxialV) {
-        // Axial no contribuye a este par — o ya fue cancelado
-        const cancelled = Math.abs(axFrontV + axBackV) > DEAD
-        src = cancelled
-          ? ` — radial neto tras compensación axial`
-          : ` — corrección radial`
+      if (hasRadialV && hasAxialV) {
+        if (Math.abs(axPart) > DEAD) {
+          const signR = radV >= 0 ? 'up' : 'down'
+          const signA = axPart >= 0 ? 'up' : 'down'
+          const factorStr = hasGeo ? ` (factor ${factor!.toFixed(2)})` : ' (aprox.)'
+          src = ` — radial ${signR} ${Math.abs(radV).toFixed(0)} + axial ${signA} ${Math.abs(axPart).toFixed(0)} um${factorStr}`
+        } else {
+          src = ` — solo radial; axial compensado en este par`
+        }
       } else if (hasAxialV) {
-        src = ` — corrección axial angular`
+        src = hasGeo
+          ? ` — axial angular (dF/D=${factorF!.toFixed(2)}, dB/D=${factorB!.toFixed(2)})`
+          : ` — correccion axial angular (sin geometria: aprox.)`
       } else {
-        src = ` — corrección radial`
+        src = ` — correccion radial`
       }
 
       locs.forEach(loc => corrections.push({
         id: `v-${loc}`, location: loc, direction: 'vertical', side,
         magnitude: Math.abs(net), unit: 'µm', priority: pV,
-        description: `Corrección vertical ${urgency(pV)}: ${action} ${Math.abs(net).toFixed(0)} µm en ${label}${src}`,
+        description: `Correccion vertical ${urgency(pV)}: ${action} ${Math.abs(net).toFixed(0)} um en ${label}${src}`,
       }))
     }
 
@@ -118,16 +137,24 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
   }
 
   // ── Correcciones horizontales combinadas ──────────────────────────────────
-  // Radial contribuye igual a las 4 patas: rd_hComp/2 (signo: + = derecha)
-  // Axial contribuye solo a patas traseras: ax_hErr (signo: + = derecha)
   const hasRadialH = pRadial !== null && rdR && !rdIncoherent && Math.abs(rd_hComp) > DEAD
   const hasAxialH  = pAxial  !== null && axR  && Math.abs(ax_hErr)  > DEAD
 
   if (hasRadialH || hasAxialH) {
-    const radH    = hasRadialH ? rd_hComp / 2 : 0
-    const axBackH = hasAxialH  ? ax_hErr : 0
+    const radH = hasRadialH ? rd_hComp / 2 : 0
 
-    const frontNet = radH
+    let axFrontH: number, axBackH: number
+    if (hasAxialH && hasGeo) {
+      axFrontH = ax_hErr * factorF!
+      axBackH  = ax_hErr * factorB!
+    } else if (hasAxialH) {
+      axFrontH = 0
+      axBackH  = ax_hErr
+    } else {
+      axFrontH = 0; axBackH = 0
+    }
+
+    const frontNet = radH + axFrontH
     const backNet  = radH + axBackH
     const pH       = maxPriority(hasRadialH ? pRadial : null, hasAxialH ? pAxial : null)
 
@@ -136,22 +163,29 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
       const side   = net > 0 ? 'right' as const : 'left' as const
       const action = net > 0 ? 'mover a la derecha' : 'mover a la izquierda'
       const label  = isFront ? 'patas delanteras' : 'patas traseras'
+      const axPart = isFront ? axFrontH : axBackH
+      const factor = isFront ? factorF : factorB
 
       let src: string
-      if (!isFront && hasRadialH && hasAxialH && Math.abs(axBackH) > DEAD) {
-        const signR = radH > 0 ? '→' : '←'
-        const signA = axBackH > 0 ? '→' : '←'
-        src = ` (radial ${signR}${Math.abs(radH).toFixed(0)} µm + axial ${signA}${Math.abs(axBackH).toFixed(0)} µm)`
-      } else if (!isFront && hasAxialH) {
-        src = ` — corrección axial angular`
+      if (hasRadialH && hasAxialH) {
+        if (Math.abs(axPart) > DEAD) {
+          const factorStr = hasGeo ? ` (factor ${factor!.toFixed(2)})` : ' (aprox.)'
+          src = ` — radial ${Math.abs(radH).toFixed(0)} + axial ${Math.abs(axPart).toFixed(0)} um${factorStr}`
+        } else {
+          src = ` — solo radial; axial compensado en este par`
+        }
+      } else if (hasAxialH) {
+        src = hasGeo
+          ? ` — axial angular (factor ${factor!.toFixed(2)})`
+          : ` — correccion axial angular (sin geometria: aprox.)`
       } else {
-        src = ` — corrección radial`
+        src = ` — correccion radial`
       }
 
       locs.forEach(loc => corrections.push({
         id: `h-${loc}`, location: loc, direction: 'horizontal', side,
         magnitude: Math.abs(net), unit: 'µm', priority: pH,
-        description: `Corrección horizontal ${urgency(pH)}: ${action} ${Math.abs(net).toFixed(0)} µm — ${label}${src}`,
+        description: `Correccion horizontal ${urgency(pH)}: ${action} ${Math.abs(net).toFixed(0)} um — ${label}${src}`,
       }))
     }
 
@@ -164,7 +198,7 @@ export function calculateCorrections(reading: ReadingData): AlignmentCorrection[
     corrections.push({
       id: 'axial-generic', location: 'shaft', direction: 'axial', side: 'front',
       magnitude: tirAxial, unit: 'µm', priority: pAxial,
-      description: `Runout axial ${urgency(pAxial)}: ${tirAxial.toFixed(0)} µm — revisar montaje del reloj y cara del acople.`,
+      description: `Runout axial ${urgency(pAxial)}: ${tirAxial.toFixed(0)} um — revisar montaje del reloj y cara del acople.`,
     })
   }
 

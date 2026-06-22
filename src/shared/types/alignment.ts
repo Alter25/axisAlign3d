@@ -6,12 +6,20 @@ export interface RunoutReadings {
   r9:  number   // lectura a 270° relativa a 12h, en µm
 }
 
+// Geometría física del equipo — necesaria para correcciones angulares precisas
+export interface EquipmentGeometry {
+  D:  number  // diámetro del acople donde toca el reloj axial (mm)
+  dF: number  // distancia cara del acople → patas delanteras (mm)
+  dB: number  // distancia cara del acople → patas traseras (mm)
+}
+
 // Datos capturados desde el formulario de lectura
 export interface ReadingData {
   runoutAxial: number;          // TIR en µm
   runoutRadial: number;         // TIR en µm
   runoutAxialReadings?: RunoutReadings   // lecturas individuales para corrección direccional
   runoutRadialReadings?: RunoutReadings
+  geometry?: EquipmentGeometry  // si se omite, las correcciones axiales son aproximadas
 }
 
 // Las 4 patas del motor (nombradas desde el frente del equipo, mirando al acople)
