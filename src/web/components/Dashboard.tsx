@@ -96,10 +96,19 @@ export function Dashboard() {
   const [autoRotate, setAutoRotate]   = useState(true)
   const [viewPreset, setViewPreset]   = useState<ViewPreset>('free')
   const [editorState, setEditorState] = useState<ArrowEditorState>(loadEditorState)
+  const [isMobile, setIsMobile]       = useState(() => window.matchMedia('(max-width: 1023px)').matches)
 
   useEffect(() => {
     try { localStorage.setItem(DEV_STORAGE_KEY, JSON.stringify(editorState)) } catch {}
   }, [editorState])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)')
+    setIsMobile(mq.matches)
+    const h = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [])
 
   const activeCorrections = devMode
     ? DEV_CORRECTIONS.filter(c => editorState.visibleArrows[c.id] !== false)
@@ -128,8 +137,7 @@ export function Dashboard() {
     <div className="flex flex-col gap-4 p-4 lg:grid lg:grid-cols-3">
       {/* Escena 3D */}
       <div
-        className="relative order-1 overflow-hidden rounded-xl border border-slate-200 bg-slate-900 shadow-sm lg:order-2 lg:col-span-2"
-        style={{ minHeight: '420px' }}
+        className="relative order-1 h-[420px] overflow-hidden rounded-xl border border-slate-200 bg-slate-900 shadow-sm lg:order-2 lg:col-span-2 lg:h-auto lg:min-h-[420px]"
       >
         <Scene
           corrections={activeCorrections}
@@ -146,6 +154,7 @@ export function Dashboard() {
           axialPosition={editorState.axialPosition}
           onAxialPositionChange={devMode ? handleAxialPositionChange : undefined}
           viewPreset={viewPreset}
+          isMobile={isMobile}
         />
 
         {/* Labels 2D — esquina superior izquierda */}

@@ -1,5 +1,5 @@
-import { Suspense } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Suspense, useRef } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Bounds, Environment } from '@react-three/drei'
 import { EquipmentModel } from './EquipmentModel'
 import { ArrowIndicators } from './ArrowIndicators'
@@ -9,6 +9,25 @@ import { PataMarkers } from '../../dev/PataMarkers'
 import type { PataMarkersProps } from '../../dev/PataMarkers'
 import { AxisMarkers, CameraDriver, DragMarker } from '../../dev/AxisMarkers'
 import type { AxisMarkersProps, ViewPreset } from '../../dev/AxisMarkers'
+
+// Centro del modelo (footprint de patas es ~cuadrado, se enfoca el cuerpo del motor)
+const MOTOR_FOCUS: [number, number, number] = [25, 20, 40]
+// Cámara: vista 3/4 empinada y cercana → llena el viewport ~cuadrado de mobile
+const MOTOR_CAM: [number, number, number] = [25, 200, 130]
+
+function MobileAdjust({ active }: { active: boolean }) {
+  const applied = useRef(false)
+
+  useFrame(({ camera, controls }) => {
+    if (!active || applied.current || !controls) return
+    applied.current = true
+    camera.position.set(...MOTOR_CAM)
+    ;(controls as any).target.set(...MOTOR_FOCUS)
+    ;(controls as any).update()
+  })
+
+  return null
+}
 
 interface SceneProps {
   corrections: AlignmentCorrection[]
@@ -25,6 +44,7 @@ interface SceneProps {
   axialPosition?: [number, number, number]
   onAxialPositionChange?: (pos: [number, number, number]) => void
   viewPreset?: ViewPreset
+  isMobile?: boolean
 }
 
 function FallbackModel() {
@@ -54,24 +74,28 @@ export function Scene({
   devPositions, onDevPositionChange,
   axisPoints, onAxisPointsChange, markerSize,
   axialPosition, onAxialPositionChange,
-  viewPreset = 'free',
+  viewPreset = 'free', isMobile = false,
 }: SceneProps) {
   return (
     <Canvas
+      key={isMobile ? 'mobile' : 'desktop'}
       style={{ width: '100%', height: '100%' }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
-      camera={{ position: [0, 2, 10], fov: 45 }}
+      camera={{ position: isMobile ? MOTOR_CAM : [0, 5, 5], fov: 45 }}
     >
       <ambientLight intensity={0.6} />
       <directionalLight position={[5, 10, 5]} intensity={1.2} castShadow />
       <directionalLight position={[-5, -5, -5]} intensity={0.3} />
 
       <Suspense fallback={<FallbackModel />}>
-        {/* margin=1.4 → 40% de espacio libre alrededor del modelo */}
-        <Bounds fit clip margin={1.4}>
+        {isMobile ? (
           <EquipmentModel />
-        </Bounds>
+        ) : (
+          <Bounds fit clip margin={1.4}>
+            <EquipmentModel />
+          </Bounds>
+        )}
         <Environment preset="city" />
       </Suspense>
 
@@ -111,7 +135,8 @@ export function Scene({
         axialPosition={axialPosition}
       />
 
-      <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={0.6} minDistance={0.5} maxDistance={200} />
+      <OrbitControls makeDefault autoRotate={autoRotate} autoRotateSpeed={0.6} minDistance={0.5} maxDistance={600} />
+      <MobileAdjust active={isMobile && !devMode} />
     </Canvas>
   )
 }

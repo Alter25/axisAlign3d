@@ -124,12 +124,12 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
 
       {/* Dial + inputs around clock positions — 3×3 grid */}
       <div
-        className="mx-auto"
+        className="mx-auto w-full"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'min-content 160px min-content',
-          gridTemplateRows: 'min-content 160px min-content',
+          gridTemplateColumns: '58px minmax(0, 160px) 58px',
           gap: 6,
+          maxWidth: 288,
         }}
       >
         {/* ── Row 0 ── */}
@@ -148,7 +148,7 @@ export function DialIndicator({ label, type, unit, readings, onChange, error }: 
           </div>
         </div>
 
-        <svg viewBox="0 0 180 180" style={{ width: '100%', height: '100%', display: 'block' }}>
+        <svg viewBox="0 0 180 180" style={{ width: '100%', height: 'auto', display: 'block' }}>
           {/* Bezel */}
           <circle cx={CX} cy={CY} r={88} fill="#1e293b" />
           {/* Face */}
