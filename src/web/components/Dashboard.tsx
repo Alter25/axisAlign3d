@@ -3,6 +3,7 @@ import { useAlignmentCalculations } from '@/shared/hooks/useAlignmentCalculation
 import { Scene } from './3d/Scene'
 import { ReadingForm } from './ui/ReadingForm'
 import { CorrectionSteps } from './ui/CorrectionSteps'
+import { UsageInstructions } from './ui/UsageInstructions'
 import { DEV_CORRECTIONS } from '../dev/devCorrections'
 import { ArrowEditor, INITIAL_EDITOR_STATE } from '../dev/ArrowEditor'
 import type { ArrowEditorState } from '../dev/ArrowEditor'
@@ -104,8 +105,8 @@ export function Dashboard() {
     ? DEV_CORRECTIONS.filter(c => editorState.visibleArrows[c.id] !== false)
     : corrections
 
-  const positionsOverride = devMode ? editorState.positions : undefined
-  const offsetsOverride   = devMode ? editorState.offsets   : undefined
+  const positionsOverride = editorState.positions            // always use calibrated positions from localStorage
+  const offsetsOverride   = devMode ? editorState.offsets : undefined
 
   function handlePataMove(key: keyof typeof PATA_POSITIONS, pos: [number, number, number]) {
     setEditorState(s => ({ ...s, positions: { ...s.positions, [key]: pos } }))
@@ -135,14 +136,14 @@ export function Dashboard() {
           devMode={devMode}
           positionsOverride={positionsOverride}
           offsetsOverride={offsetsOverride}
-          arrowScale={devMode ? editorState.arrowScale : 15}
+          arrowScale={devMode ? editorState.arrowScale : 22.5}
           autoRotate={autoRotate}
           devPositions={devMode ? editorState.positions : undefined}
           onDevPositionChange={devMode ? handlePataMove : undefined}
-          axisPoints={devMode ? editorState.axisPoints : undefined}
+          axisPoints={editorState.axisPoints}
           onAxisPointsChange={devMode ? handleAxisChange : undefined}
           markerSize={devMode ? editorState.markerSize : undefined}
-          axialPosition={devMode ? editorState.axialPosition : undefined}
+          axialPosition={editorState.axialPosition}
           onAxialPositionChange={devMode ? handleAxialPositionChange : undefined}
           viewPreset={viewPreset}
         />
@@ -221,8 +222,17 @@ export function Dashboard() {
 
       {/* Pasos de corrección */}
       {!devMode && activeCorrections.length > 0 && (
-        <div className="order-4 rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-3">
-          <CorrectionSteps corrections={activeCorrections} />
+        <div className="order-4 lg:col-span-3">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <CorrectionSteps corrections={activeCorrections} />
+          </div>
+        </div>
+      )}
+
+      {/* Instrucciones de uso */}
+      {!devMode && (
+        <div className="order-5 lg:col-span-3">
+          <UsageInstructions />
         </div>
       )}
     </div>

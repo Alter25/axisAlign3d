@@ -1,11 +1,3 @@
-// Umbrales ISO 10816 para vibración en mm/s (clase II: equipos medianos)
-export const ISO_10816_THRESHOLDS = {
-  zone_a: 2.3,  // máquinas nuevas
-  zone_b: 4.5,  // operación sin restricción
-  zone_c: 7.1,  // operación limitada — programa mantenimiento
-  zone_d: 11.0, // zona de daño — detener equipo
-} as const
-
 // Umbrales de runout (micrones)
 export const RUNOUT_THRESHOLDS = {
   axial_warning: 50,   // micrones
@@ -14,11 +6,8 @@ export const RUNOUT_THRESHOLDS = {
   radial_critical: 75,
 } as const
 
-// Umbrales de temperatura en rodamientos (°C)
-export const TEMP_THRESHOLDS = {
-  warning: 80,
-  critical: 95,
-} as const
+// Posición del acople (centro entre ejes motor-bomba) — calibrado en modo DEV
+export const AXIAL_ARROW_POSITION: [number, number, number] = [-41.5, 0, -36]
 
 // Eje del equipo — puntos calibrados en modo DEV
 export const AXIS_POINTS = {
@@ -32,9 +21,9 @@ export const AXIS_POINTS = {
 // front = lado del acople, back = lado trasero
 // left/right desde el frente mirando al motor
 export const PATA_POSITIONS = {
-  'front-left':  [  9.000,  -0.500, -33.837] as [number, number, number],
+  'front-left':  [-54.255,  -0.500,  29.311] as [number, number, number],
   'front-right': [ -9.633,  -0.500, -54.944] as [number, number, number],
-  'back-left':   [ 38.284, -26.000, 122.020] as [number, number, number],
+  'back-left':   [ 38.284,  -0.500, 122.020] as [number, number, number],
   'back-right':  [126.553,  -0.500,  41.481] as [number, number, number],
 }
 

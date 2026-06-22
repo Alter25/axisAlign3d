@@ -1,12 +1,25 @@
+// Lecturas individuales de las 4 posiciones del reloj (normalizadas a 12h=0, en µm)
+export interface RunoutReadings {
+  r12: number   // siempre 0 (referencia)
+  r3:  number   // lectura a 90° relativa a 12h, en µm
+  r6:  number   // lectura a 180° relativa a 12h, en µm
+  r9:  number   // lectura a 270° relativa a 12h, en µm
+}
+
+// Geometría física del equipo — necesaria para correcciones angulares precisas
+export interface EquipmentGeometry {
+  D:  number  // diámetro del acople donde toca el reloj axial (mm)
+  dF: number  // distancia cara del acople → patas delanteras (mm)
+  dB: number  // distancia cara del acople → patas traseras (mm)
+}
+
 // Datos capturados desde el formulario de lectura
 export interface ReadingData {
-  verticalVibration?: number;   // mm/s (opcional — prealineación rápida)
-  horizontalVibration?: number; // mm/s (opcional — prealineación rápida)
-  verticalPhase?: number;       // 0-360 grados (opcional)
-  horizontalPhase?: number;     // 0-360 grados (opcional)
-  runoutAxial: number;          // micrones
-  runoutRadial: number;         // micrones
-  bearingTemperature?: number;  // °C (opcional)
+  runoutAxial: number;          // TIR en µm
+  runoutRadial: number;         // TIR en µm
+  runoutAxialReadings?: RunoutReadings   // lecturas individuales para corrección direccional
+  runoutRadialReadings?: RunoutReadings
+  geometry?: EquipmentGeometry  // si se omite, las correcciones axiales son aproximadas
 }
 
 // Las 4 patas del motor (nombradas desde el frente del equipo, mirando al acople)
@@ -18,7 +31,8 @@ export interface AlignmentCorrection {
   location: PataLocation | 'shaft';  // patas = flechas 3D | shaft = solo texto
   direction: 'vertical' | 'horizontal' | 'axial';
   side: 'top' | 'bottom' | 'left' | 'right' | 'front' | 'back';
-  magnitude: number;    // mm/s vibración o µm runout
+  magnitude: number;
+  unit?: 'mm/s' | 'µm' | '°C';
   priority: 1 | 2 | 3; // 1=crítico, 2=advertencia, 3=info
   description: string;
   visible?: boolean;

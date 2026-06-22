@@ -1,116 +1,52 @@
 import { useState } from 'react'
 import type { ReadingData } from '@/shared/types/alignment'
+import { DialIndicator, computeTIR, tirToMicrons, getReadingsInMicrons, EMPTY_DIAL_READINGS } from './DialIndicator'
+import type { DialReadings, DialUnit, DialPosition } from './DialIndicator'
 
 interface ReadingFormProps {
   onSubmit: (data: ReadingData) => void
 }
 
-// Descripciones técnicas para cada campo
-const FIELD_INFO: Record<string, string> = {
-  runoutAxial:
-    'Medido con reloj comparador apoyado en la CARA del acople, girando el eje a mano lentamente. Detecta falta de paralelismo axial (cocking). Valor aceptable típico: < 50 µm.',
-  runoutRadial:
-    'Medido con reloj comparador apoyado en el DIÁMETRO exterior del acople, girando el eje. Detecta excentricidad o descentramiento radial. Valor aceptable típico: < 30 µm.',
-  verticalVibration:
-    'Velocidad de vibración en dirección vertical, medida sobre la carcasa del rodamiento con vibrómetro o analizador. Zonas ISO 10816: A < 2.3 | B < 4.5 | C < 7.1 | D > 11 mm/s.',
-  horizontalVibration:
-    'Velocidad de vibración en dirección horizontal (90° de la vertical), mismo punto de medición. Valores altos respecto a la vertical pueden indicar resonancia o desalineación angular.',
-  verticalPhase:
-    'Ángulo de fase obtenido con estroboscopio o sensor de fase/tacómetro en dirección vertical. Indica la posición del vector de vibración en el ciclo rotacional (0-360°).',
-  horizontalPhase:
-    'Ángulo de fase en dirección horizontal. La diferencia entre fase vertical y horizontal ayuda a discriminar entre desbalance (≈0° diferencia) y desalineación (≈90° o 180°).',
-  bearingTemperature:
-    'Temperatura superficial de la carcasa del rodamiento, medida con termómetro infrarrojo. Normal: < 80°C. Alarma: > 80°C. Paro: > 95°C. Indica sobrecarga, falta de lubricación o daño incipiente.',
-}
-
-function FieldTooltip({ fieldKey }: { fieldKey: string }) {
-  const info = FIELD_INFO[fieldKey]
-  if (!info) return null
-  return (
-    <details className="mt-1">
-      <summary className="w-fit cursor-pointer list-none text-xs text-slate-400 hover:text-slate-600 select-none">
-        <span className="inline-flex items-center gap-1">
-          <span className="rounded-full border border-slate-300 px-1.5 text-[10px] font-bold leading-tight">?</span>
-          ¿Qué mido aquí?
-        </span>
-      </summary>
-      <p className="mt-1.5 rounded-md bg-slate-50 p-2.5 text-xs leading-relaxed text-slate-600">
-        {info}
-      </p>
-    </details>
-  )
-}
-
 interface FieldState {
-  runoutAxial: string
-  runoutRadial: string
-  verticalVibration: string
-  horizontalVibration: string
-  verticalPhase: string
-  horizontalPhase: string
-  bearingTemperature: string
+  dialAxial: DialReadings
+  dialRadial: DialReadings
 }
+
+interface GeometryState {
+  D:  string   // Ø acople (mm)
+  dF: string   // dist. acople → patas del. (mm)
+  dB: string   // dist. acople → patas tras. (mm)
+}
+
+interface FormErrors {
+  dialAxial?: string
+  dialRadial?: string
+  form?: string
+}
+
+const emptyGeometry: GeometryState = { D: '', dF: '', dB: '' }
 
 const empty: FieldState = {
-  runoutAxial: '',
-  runoutRadial: '',
-  verticalVibration: '',
-  horizontalVibration: '',
-  verticalPhase: '',
-  horizontalPhase: '',
-  bearingTemperature: '',
-}
-
-function parseOptional(v: string): number | undefined {
-  if (v.trim() === '') return undefined
-  const n = Number(v)
-  return isNaN(n) ? undefined : n
+  dialAxial: EMPTY_DIAL_READINGS,
+  dialRadial: EMPTY_DIAL_READINGS,
 }
 
 export function ReadingForm({ onSubmit }: ReadingFormProps) {
-  const [fields, setFields] = useState<FieldState>(empty)
-  const [errors, setErrors] = useState<Partial<FieldState>>({})
-  const [showVibration, setShowVibration] = useState(false)
-
-  function set(key: keyof FieldState, value: string) {
-    setFields(prev => ({ ...prev, [key]: value }))
-    setErrors(prev => ({ ...prev, [key]: undefined }))
-  }
+  const [fields,   setFields]   = useState<FieldState>(empty)
+  const [geometry, setGeometry] = useState<GeometryState>(emptyGeometry)
+  const [errors,   setErrors]   = useState<FormErrors>({})
+  const [unit,     setUnit]     = useState<DialUnit>('centesimas')
 
   function validate(): boolean {
-    const next: Partial<FieldState> = {}
+    const next: FormErrors = {}
+    const hasFilled = (d: DialReadings) =>
+      (['12h', '3h', '6h', '9h'] as DialPosition[]).some(p => d[p].trim() !== '' && !isNaN(Number(d[p])))
 
-    const axial = Number(fields.runoutAxial)
-    const radial = Number(fields.runoutRadial)
+    const axialFilled  = hasFilled(fields.dialAxial)
+    const radialFilled = hasFilled(fields.dialRadial)
 
-    if (fields.runoutAxial.trim() === '' || isNaN(axial) || axial < 0)
-      next.runoutAxial = 'Ingresa un valor ≥ 0'
-    if (fields.runoutRadial.trim() === '' || isNaN(radial) || radial < 0)
-      next.runoutRadial = 'Ingresa un valor ≥ 0'
-
-    if (showVibration) {
-      if (fields.verticalVibration !== '') {
-        const v = Number(fields.verticalVibration)
-        if (isNaN(v) || v < 0) next.verticalVibration = 'Valor inválido'
-      }
-      if (fields.horizontalVibration !== '') {
-        const v = Number(fields.horizontalVibration)
-        if (isNaN(v) || v < 0) next.horizontalVibration = 'Valor inválido'
-      }
-      if (fields.verticalPhase !== '') {
-        const v = Number(fields.verticalPhase)
-        if (isNaN(v) || v < 0 || v > 360) next.verticalPhase = '0 – 360°'
-      }
-      if (fields.horizontalPhase !== '') {
-        const v = Number(fields.horizontalPhase)
-        if (isNaN(v) || v < 0 || v > 360) next.horizontalPhase = '0 – 360°'
-      }
-    }
-
-    if (fields.bearingTemperature !== '') {
-      const v = Number(fields.bearingTemperature)
-      if (isNaN(v) || v < 0 || v > 200) next.bearingTemperature = '0 – 200°C'
-    }
+    if (!axialFilled && !radialFilled)
+      next.form = 'Ingresa lecturas en al menos uno de los dos relojes'
 
     setErrors(next)
     return Object.keys(next).length === 0
@@ -120,127 +56,122 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     e.preventDefault()
     if (!validate()) return
 
+    const D  = parseFloat(geometry.D)
+    const dF = parseFloat(geometry.dF)
+    const dB = parseFloat(geometry.dB)
+    const hasGeometry = D > 0 && dF > 0 && dB > 0 && dF < dB
+
     const data: ReadingData = {
-      runoutAxial: Number(fields.runoutAxial),
-      runoutRadial: Number(fields.runoutRadial),
-      verticalVibration: showVibration ? parseOptional(fields.verticalVibration) : undefined,
-      horizontalVibration: showVibration ? parseOptional(fields.horizontalVibration) : undefined,
-      verticalPhase: showVibration ? parseOptional(fields.verticalPhase) : undefined,
-      horizontalPhase: showVibration ? parseOptional(fields.horizontalPhase) : undefined,
-      bearingTemperature: parseOptional(fields.bearingTemperature),
+      runoutAxial:          tirToMicrons(computeTIR(fields.dialAxial),  unit),
+      runoutRadial:         tirToMicrons(computeTIR(fields.dialRadial), unit),
+      runoutAxialReadings:  getReadingsInMicrons(fields.dialAxial,  unit),
+      runoutRadialReadings: getReadingsInMicrons(fields.dialRadial, unit),
+      geometry: hasGeometry ? { D, dF, dB } : undefined,
     }
     onSubmit(data)
   }
 
   function handleReset() {
     setFields(empty)
+    setGeometry(emptyGeometry)
     setErrors({})
+  }
+
+  function setGeo(key: keyof GeometryState, val: string) {
+    setGeometry(prev => ({ ...prev, [key]: val }))
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5 p-4">
       <h2 className="text-base font-semibold text-slate-800">Lecturas de Campo</h2>
 
-      {/* ── RUNOUT (siempre visible) ── */}
-      <section className="flex flex-col gap-3">
+      {/* Encabezado + toggle de unidades */}
+      <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
           Runout — Reloj Comparador
         </p>
-
-        <NumberField
-          id="runoutAxial"
-          label="Runout Axial"
-          unit="µm"
-          placeholder="0 – 500"
-          value={fields.runoutAxial}
-          error={errors.runoutAxial}
-          onChange={v => set('runoutAxial', v)}
-        />
-
-        <NumberField
-          id="runoutRadial"
-          label="Runout Radial"
-          unit="µm"
-          placeholder="0 – 500"
-          value={fields.runoutRadial}
-          error={errors.runoutRadial}
-          onChange={v => set('runoutRadial', v)}
-        />
-      </section>
-
-      {/* ── VIBRACIÓN (colapsable) ── */}
-      <section className="flex flex-col gap-3">
         <button
           type="button"
-          onClick={() => setShowVibration(v => !v)}
-          className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:bg-slate-100"
+          onClick={() => setUnit(u => u === 'centesimas' ? 'miles' : 'centesimas')}
+          className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-mono text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+          title={unit === 'centesimas' ? 'Cambiar a milésimas de pulgada' : 'Cambiar a centésimas de mm'}
         >
-          <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Vibración — Analizador
-          </span>
-          <span className="text-xs text-slate-400">{showVibration ? '▲ ocultar' : '▼ mostrar'}</span>
+          {unit === 'centesimas' ? '0.01 mm  →  0.001″' : '0.001″  →  0.01 mm'}
         </button>
+      </div>
 
-        {showVibration && (
-          <div className="flex flex-col gap-3 pl-1">
-            <NumberField
-              id="verticalVibration"
-              label="Vibración Vertical"
-              unit="mm/s"
-              placeholder="0 – 50"
-              value={fields.verticalVibration}
-              error={errors.verticalVibration}
-              onChange={v => set('verticalVibration', v)}
-            />
+      <DialIndicator
+        label="Axial — cara del acople"
+        type="axial"
+        unit={unit}
+        readings={fields.dialAxial}
+        onChange={(pos, val) => {
+          setFields(prev => ({ ...prev, dialAxial: { ...prev.dialAxial, [pos]: val } }))
+          setErrors(prev => ({ ...prev, dialAxial: undefined }))
+        }}
+        error={errors.dialAxial}
+      />
 
-            <PhaseField
-              id="verticalPhase"
-              label="Fase Vertical"
-              value={fields.verticalPhase}
-              error={errors.verticalPhase}
-              onChange={v => set('verticalPhase', v)}
-            />
+      <DialIndicator
+        label="Radial — diámetro del acople"
+        type="radial"
+        unit={unit}
+        readings={fields.dialRadial}
+        onChange={(pos, val) => {
+          setFields(prev => ({ ...prev, dialRadial: { ...prev.dialRadial, [pos]: val } }))
+          setErrors(prev => ({ ...prev, dialRadial: undefined }))
+        }}
+        error={errors.dialRadial}
+      />
 
-            <NumberField
-              id="horizontalVibration"
-              label="Vibración Horizontal"
-              unit="mm/s"
-              placeholder="0 – 50"
-              value={fields.horizontalVibration}
-              error={errors.horizontalVibration}
-              onChange={v => set('horizontalVibration', v)}
-            />
-
-            <PhaseField
-              id="horizontalPhase"
-              label="Fase Horizontal"
-              value={fields.horizontalPhase}
-              error={errors.horizontalPhase}
-              onChange={v => set('horizontalPhase', v)}
-            />
-          </div>
-        )}
-      </section>
-
-      {/* ── TEMPERATURA (siempre visible, opcional) ── */}
-      <section className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-          Temperatura — Opcional
+      {/* ── Geometría del equipo ── */}
+      <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+          Geometría del equipo
+          <span className="ml-1.5 font-normal normal-case tracking-normal text-slate-400">
+            (para correcciones axiales precisas)
+          </span>
         </p>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { key: 'D',  label: 'Ø acople',      title: 'Diámetro del acople (donde toca el reloj axial)' },
+            { key: 'dF', label: 'Dist. del.',     title: 'Distancia cara del acople → patas delanteras' },
+            { key: 'dB', label: 'Dist. tras.',    title: 'Distancia cara del acople → patas traseras' },
+          ] as const).map(({ key, label, title }) => (
+            <div key={key} className="flex flex-col gap-0.5" title={title}>
+              <span className="text-[9px] font-semibold text-slate-500">{label}</span>
+              <div className="flex items-center gap-0.5">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={geometry[key]}
+                  placeholder="—"
+                  onChange={e => setGeo(key, e.target.value)}
+                  className="w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-center text-xs font-mono text-slate-800 outline-none
+                    focus:border-slate-500"
+                />
+                <span className="shrink-0 text-[9px] text-slate-400">mm</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        {(() => {
+          const D  = parseFloat(geometry.D)
+          const dF = parseFloat(geometry.dF)
+          const dB = parseFloat(geometry.dB)
+          if (D > 0 && dF > 0 && dB > 0 && dF >= dB)
+            return <p className="text-[10px] text-amber-600">⚠ Dist. traseras debe ser mayor que delantera</p>
+          if (D > 0 && dF > 0 && dB > dF)
+            return <p className="text-[10px] text-green-600">✓ Geometría completa — cálculo preciso</p>
+          return null
+        })()}
+      </div>
 
-        <NumberField
-          id="bearingTemperature"
-          label="Rodamientos"
-          unit="°C"
-          placeholder="Ej: 65"
-          value={fields.bearingTemperature}
-          error={errors.bearingTemperature}
-          onChange={v => set('bearingTemperature', v)}
-          optional
-        />
-      </section>
+      {errors.form && (
+        <p className="text-xs text-red-500">{errors.form}</p>
+      )}
 
-      {/* ── BOTONES ── */}
       <div className="flex gap-2 pt-1">
         <button
           type="submit"
@@ -259,95 +190,5 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
         </button>
       </div>
     </form>
-  )
-}
-
-// ── Sub-componentes ──────────────────────────────────────────────
-
-interface NumberFieldProps {
-  id: string
-  label: string
-  unit: string
-  placeholder: string
-  value: string
-  error?: string
-  optional?: boolean
-  onChange: (v: string) => void
-}
-
-function NumberField({ id, label, unit, placeholder, value, error, optional, onChange }: NumberFieldProps) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <label htmlFor={id} className="flex items-center gap-1 text-sm font-medium text-slate-700">
-        {label}
-        <span className="text-xs font-normal text-slate-400">({unit})</span>
-        {optional && <span className="text-xs font-normal text-slate-400">— opcional</span>}
-      </label>
-
-      <input
-        id={id}
-        type="number"
-        min={0}
-        step="any"
-        value={value}
-        placeholder={placeholder}
-        onChange={e => onChange(e.target.value)}
-        className={`w-full rounded-md border px-3 py-2 text-sm outline-none transition
-          focus:ring-2 focus:ring-slate-400
-          ${error ? 'border-red-400 bg-red-50' : 'border-slate-300 bg-white'}`}
-      />
-
-      {error && <p className="text-xs text-red-500">{error}</p>}
-
-      <FieldTooltip fieldKey={id} />
-    </div>
-  )
-}
-
-interface PhaseFieldProps {
-  id: string
-  label: string
-  value: string
-  error?: string
-  onChange: (v: string) => void
-}
-
-function PhaseField({ id, label, value, error, onChange }: PhaseFieldProps) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <label htmlFor={id} className="flex items-center gap-1 text-sm font-medium text-slate-700">
-        {label}
-        <span className="text-xs font-normal text-slate-400">(0 – 360°)</span>
-      </label>
-
-      <div className="flex items-center gap-2">
-        <input
-          id={id}
-          type="number"
-          min={0}
-          max={360}
-          step={1}
-          value={value}
-          placeholder="0 – 360"
-          onChange={e => onChange(e.target.value)}
-          className={`w-24 rounded-md border px-3 py-2 text-sm outline-none transition
-            focus:ring-2 focus:ring-slate-400
-            ${error ? 'border-red-400 bg-red-50' : 'border-slate-300 bg-white'}`}
-        />
-        <input
-          type="range"
-          min={0}
-          max={360}
-          step={1}
-          value={value || '0'}
-          onChange={e => onChange(e.target.value)}
-          className="flex-1 accent-slate-700"
-        />
-      </div>
-
-      {error && <p className="text-xs text-red-500">{error}</p>}
-
-      <FieldTooltip fieldKey={id} />
-    </div>
   )
 }

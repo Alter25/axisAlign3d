@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Group } from 'three'
 import type { AlignmentCorrection } from '@/shared/types/alignment'
-import { PATA_POSITIONS, DIRECTION_OFFSETS, PRIORITY_COLORS, AXIS_POINTS } from '@/shared/lib/constants'
+import { PATA_POSITIONS, DIRECTION_OFFSETS, PRIORITY_COLORS, AXIS_POINTS, AXIAL_ARROW_POSITION } from '@/shared/lib/constants'
 import type { AxisPoints } from '../../dev/ArrowEditor'
 
 const PATA_KEYS = new Set(Object.keys(PATA_POSITIONS))
@@ -58,7 +58,7 @@ function sideQuaternion(side: string, xDir: THREE.Vector3, yDir: THREE.Vector3, 
   return new THREE.Quaternion().setFromUnitVectors(_up, target.normalize())
 }
 
-function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 15, axisPoints, axialPosition }: Arrow3DProps) {
+function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 22.5, axisPoints, axialPosition }: Arrow3DProps) {
   const groupRef = useRef<Group>(null)
   const color    = PRIORITY_COLORS[correction.priority]
 
@@ -69,8 +69,9 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
   const { xDir, yDir, zDir, center } = useMemo(() => computeAxisVectors(axisPoints), [axisPoints])
 
   const position: [number, number, number] = useMemo(() => {
-    const base = correction.direction === 'axial'
-      ? (axialPosition ?? [center.x, center.y, center.z] as [number, number, number])
+    const couplingCenter: [number, number, number] = axialPosition ?? AXIAL_ARROW_POSITION
+    const base = (correction.direction === 'axial' || correction.location === 'shaft')
+      ? couplingCenter
       : (positions[correction.location as keyof typeof PATA_POSITIONS] ?? [0, 0, 0])
     return [base[0] + offset[0], base[1] + offset[1], base[2] + offset[2]]
   }, [correction.location, correction.direction, axialPosition, center, offset, positions])
@@ -87,15 +88,21 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
   })
 
   return (
-    <group ref={groupRef} position={position} scale={arrowScale}>
+    <group ref={groupRef} position={position} scale={arrowScale} renderOrder={10}>
       <group quaternion={quaternion}>
-        <mesh>
+        <mesh renderOrder={10}>
           <cylinderGeometry args={[0.04, 0.04, 0.5, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive} />
+          <meshStandardMaterial
+            color={color} emissive={color} emissiveIntensity={emissive}
+            depthTest={false} depthWrite={false} transparent
+          />
         </mesh>
-        <mesh position={[0, 0.375, 0]}>
+        <mesh position={[0, 0.375, 0]} renderOrder={10}>
           <coneGeometry args={[0.1, 0.25, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissive} />
+          <meshStandardMaterial
+            color={color} emissive={color} emissiveIntensity={emissive}
+            depthTest={false} depthWrite={false} transparent
+          />
         </mesh>
       </group>
     </group>
@@ -105,8 +112,11 @@ function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 
 export function ArrowIndicators({ corrections, positionsOverride, offsetsOverride, arrowScale, axisPoints, axialPosition }: ArrowIndicatorsProps) {
   const resolvedAxis = axisPoints ?? AXIS_POINTS
   const visible = corrections.filter(c =>
-    c.visible !== false && (PATA_KEYS.has(c.location) || c.direction === 'axial')
+    c.visible !== false && (PATA_KEYS.has(c.location) || c.direction === 'axial' || c.location === 'shaft')
   )
+  if (import.meta.env.DEV) {
+    console.log('[ArrowIndicators] corrections:', corrections.length, '| visible:', visible.length, visible.map(c => `${c.id}@${c.location}`))
+  }
   return (
     <>
       {visible.map(c => (

@@ -1,150 +1,205 @@
-import type { ReadingData, AlignmentCorrection, PataLocation } from '../types/alignment'
-import { ISO_10816_THRESHOLDS, RUNOUT_THRESHOLDS, TEMP_THRESHOLDS } from './constants'
+import type { ReadingData, AlignmentCorrection, PataLocation, RunoutReadings } from '../types/alignment'
+import { RUNOUT_THRESHOLDS } from './constants'
 
-const PATAS: PataLocation[] = ['front-left', 'front-right', 'back-left', 'back-right']
+const DEAD = 5  // µm — ignorar ruido de medición
 
-const PATA_LABELS: Record<PataLocation, string> = {
-  'front-left':  'pata delantera izquierda',
-  'front-right': 'pata delantera derecha',
-  'back-left':   'pata trasera izquierda',
-  'back-right':  'pata trasera derecha',
+function runoutPriority(tir: number, warning: number, critical: number): 1 | 2 | 3 | null {
+  if (tir <= 0) return null
+  if (tir > critical) return 1
+  if (tir > warning)  return 2
+  return 3
 }
 
-function toRad(deg: number) { return (deg * Math.PI) / 180 }
+function maxPriority(a: 1 | 2 | 3 | null, b: 1 | 2 | 3 | null): 1 | 2 | 3 {
+  const vals = [a, b].filter((v): v is 1 | 2 | 3 => v !== null)
+  if (vals.length === 0) return 3
+  return Math.min(...vals) as 1 | 2 | 3
+}
 
-function getPriority(v: number): 1 | 2 | 3 | null {
-  if (v > ISO_10816_THRESHOLDS.zone_d) return 1
-  if (v > ISO_10816_THRESHOLDS.zone_c) return 2
-  if (v > ISO_10816_THRESHOLDS.zone_b) return 3
-  return null
+function urgency(p: 1 | 2 | 3): string {
+  return p === 1 ? 'CRITICO' : p === 2 ? 'elevado' : 'leve'
 }
 
 export function calculateCorrections(reading: ReadingData): AlignmentCorrection[] {
   const corrections: AlignmentCorrection[] = []
 
-  // ── Vibración vertical → shimming (Y) en las 4 patas ──────────────────────
-  // La fase determina qué par de patas necesita más corrección.
-  // vAdjY > 0: motor desplazado hacia arriba → patas deben bajar (agregar shims → side: bottom)
-  // vAdjY < 0: motor desplazado hacia abajo → patas deben subir (quitar shims → side: top)
-  // vAdjX > 0: desplazamiento mayor en patas frontales; < 0: en patas traseras
-  if (reading.verticalVibration !== undefined) {
-    const vPhaseRad = toRad(reading.verticalPhase ?? 0)
-    const vAdjY = Math.cos(vPhaseRad) * reading.verticalVibration
-    const vAdjX = Math.sin(vPhaseRad) * reading.verticalVibration
-    const priority = getPriority(reading.verticalVibration)
-    if (priority !== null) {
-      const side = vAdjY > 0 ? 'bottom' : 'top'
-      const sideLabel = side === 'bottom' ? 'agregar shims' : 'quitar shims'
-      const urgency = priority === 1 ? 'CRÍTICO' : priority === 2 ? 'advertencia' : 'revisión'
+  // ── Lecturas axiales ──────────────────────────────────────────────────────
+  const tirAxial = reading.runoutAxial
+  const pAxial   = runoutPriority(tirAxial, RUNOUT_THRESHOLDS.axial_warning, RUNOUT_THRESHOLDS.axial_critical)
+  const axR      = reading.runoutAxialReadings as RunoutReadings | undefined
+  // r6 > 0 => mayor distancia en 6h => calzar patas DELANTERAS (raise front)
+  const ax_r6    = axR ? (axR.r6  ?? 0) : 0
+  // ax_hErr = r9 - r3 > 0 => patas traseras a la derecha
+  const ax_hErr  = axR ? ((axR.r9 ?? 0) - (axR.r3 ?? 0)) : 0
 
-      // Patas más afectadas según fase
-      const primaryPatas: PataLocation[] = vAdjX > 0
-        ? ['front-left', 'front-right']
-        : ['back-left', 'back-right']
+  // ── Lecturas radiales ─────────────────────────────────────────────────────
+  const tirRadial = reading.runoutRadial
+  const pRadial   = runoutPriority(tirRadial, RUNOUT_THRESHOLDS.radial_warning, RUNOUT_THRESHOLDS.radial_critical)
+  const rdR       = reading.runoutRadialReadings as RunoutReadings | undefined
 
-      primaryPatas.forEach(loc => {
-        corrections.push({
-          id: `v-${loc}`,
-          location: loc,
-          direction: 'vertical',
-          side,
-          magnitude: Math.abs(reading.verticalVibration!),
-          priority,
-          description: `${urgency.toUpperCase()} — ${PATA_LABELS[loc]}: ${sideLabel} (${Math.abs(reading.verticalVibration!).toFixed(1)} mm/s)`,
-        })
-      })
+  // vComp = -r6 > 0 => necesita subir motor; hComp = r3-r9 > 0 => mover a la derecha
+  const rd_vComp  = rdR ? -rdR.r6 : 0
+  const rd_hComp  = rdR ? ((rdR.r3 ?? 0) - (rdR.r9 ?? 0)) : 0
+  const rdIncoherent = rdR
+    ? (Math.abs(rd_vComp) <= DEAD && Math.abs(rd_hComp) <= DEAD)
+    : false
 
-      // Patas secundarias (prioridad reducida 1 nivel)
-      const secondaryPriority = Math.min(priority + 1, 3) as 1 | 2 | 3
-      const secondaryPatas: PataLocation[] = vAdjX > 0
-        ? ['back-left', 'back-right']
-        : ['front-left', 'front-right']
+  // ── Caso: radial incoherente ───────────────────────────────────────────────
+  if (pRadial !== null && rdR && rdIncoherent) {
+    const r12 = rdR.r12 ?? 0
+    const consistency = Math.abs((r12 + rdR.r6) - ((rdR.r3 ?? 0) + (rdR.r9 ?? 0)))
+    corrections.push({
+      id: 'radial-incoherencia', location: 'shaft', direction: 'axial', side: 'front',
+      magnitude: tirRadial, unit: 'µm', priority: pRadial,
+      description: `Runout radial ${urgency(pRadial)}: lecturas incoherentes — TIR ${tirRadial.toFixed(0)} um sin direction determinable (12h+6h != 3h+9h, D=${consistency.toFixed(0)} um). Verificar colocacion del reloj, deformidad del acople o error de medicion.`,
+    })
+  }
 
-      secondaryPatas.forEach(loc => {
-        corrections.push({
-          id: `v-sec-${loc}`,
-          location: loc,
-          direction: 'vertical',
-          side,
-          magnitude: Math.abs(reading.verticalVibration!) * 0.6,
-          priority: secondaryPriority,
-          description: `Verificar ${PATA_LABELS[loc]}: ${sideLabel}`,
-        })
-      })
+  // ── Caso: axial sin lecturas individuales ─────────────────────────────────
+  if (pAxial !== null && !axR) {
+    corrections.push({
+      id: 'axial-generic', location: 'shaft', direction: 'axial', side: 'front',
+      magnitude: tirAxial, unit: 'µm', priority: pAxial,
+      description: `Runout axial ${urgency(pAxial)}: ${tirAxial.toFixed(0)} um — revisar cara del acople y fijacion axial.`,
+    })
+  }
+
+  // ── Factores de geometria ─────────────────────────────────────────────────
+  // Correccion axial exacta (Rim & Face):
+  //   C_front = radV + ax_r6 * dF/D
+  //   C_back  = radV + ax_r6 * dB/D
+  //
+  // Ambos pares reciben la componente angular, proporcional a su distancia al acople.
+  // Sin geometria: aproximacion — solo un par recibe la correccion axial.
+  const geo = reading.geometry
+  const hasGeo = !!(geo && geo.D > 0 && geo.dF > 0 && geo.dB > geo.dF)
+  const factorF = hasGeo ? geo!.dF / geo!.D : null   // dF/D
+  const factorB = hasGeo ? geo!.dB / geo!.D : null   // dB/D
+
+  // ── Correcciones verticales combinadas ────────────────────────────────────
+  const hasRadialV = pRadial !== null && rdR && !rdIncoherent && Math.abs(rd_vComp) > DEAD
+  const hasAxialV  = pAxial  !== null && axR  && Math.abs(ax_r6)   > DEAD
+
+  if (hasRadialV || hasAxialV) {
+    const radV = hasRadialV ? rd_vComp / 2 : 0
+
+    // Contribucion axial a cada par segun geometria
+    let axFrontV: number, axBackV: number
+    if (hasAxialV && hasGeo) {
+      axFrontV = ax_r6 * factorF!   // escalado por dF/D
+      axBackV  = ax_r6 * factorB!   // escalado por dB/D
+    } else if (hasAxialV) {
+      axFrontV = ax_r6 > 0 ? ax_r6 : 0   // aprox: solo el par que sube
+      axBackV  = ax_r6 < 0 ? -ax_r6 : 0
+    } else {
+      axFrontV = 0; axBackV = 0
     }
-  }
 
-  // ── Vibración horizontal → desplazamiento lateral (X) en las 4 patas ──────
-  // hAdjY > 0: motor desplazado hacia la derecha → patas deben ir a la izquierda (side: left)
-  // hAdjY < 0: motor desplazado hacia la izquierda → patas deben ir a la derecha (side: right)
-  if (reading.horizontalVibration !== undefined) {
-    const hPhaseRad = toRad(reading.horizontalPhase ?? 0)
-    const hAdjY = Math.cos(hPhaseRad) * reading.horizontalVibration
-    const priority = getPriority(reading.horizontalVibration)
-    if (priority !== null) {
-      const side = hAdjY > 0 ? 'left' : 'right'
-      const sideLabel = side === 'left' ? 'izquierda' : 'derecha'
-      const urgency = priority === 1 ? 'CRÍTICO' : priority === 2 ? 'advertencia' : 'revisión'
+    const frontNet = radV + axFrontV
+    const backNet  = radV + axBackV
+    const pV       = maxPriority(hasRadialV ? pRadial : null, hasAxialV ? pAxial : null)
 
-      PATAS.forEach(loc => {
-        corrections.push({
-          id: `h-${loc}`,
-          location: loc,
-          direction: 'horizontal',
-          side,
-          magnitude: Math.abs(reading.horizontalVibration!),
-          priority,
-          description: `${urgency.toUpperCase()} — ${PATA_LABELS[loc]}: mover hacia ${sideLabel} (${Math.abs(reading.horizontalVibration!).toFixed(1)} mm/s)`,
-        })
-      })
+    const emitVertical = (net: number, locs: PataLocation[], isFront: boolean) => {
+      if (Math.abs(net) <= DEAD) return
+      const side   = net > 0 ? 'top' as const : 'bottom' as const
+      const action = net > 0 ? 'agregar calzas' : 'quitar calzas'
+      const label  = isFront ? 'patas delanteras' : 'patas traseras'
+      const axPart = isFront ? axFrontV : axBackV
+      const factor = isFront ? factorF : factorB
+
+      let src: string
+      if (hasRadialV && hasAxialV) {
+        if (Math.abs(axPart) > DEAD) {
+          const signR = radV >= 0 ? 'up' : 'down'
+          const signA = axPart >= 0 ? 'up' : 'down'
+          const factorStr = hasGeo ? ` (factor ${factor!.toFixed(2)})` : ' (aprox.)'
+          src = ` — radial ${signR} ${Math.abs(radV).toFixed(0)} + axial ${signA} ${Math.abs(axPart).toFixed(0)} um${factorStr}`
+        } else {
+          src = ` — solo radial; axial compensado en este par`
+        }
+      } else if (hasAxialV) {
+        src = hasGeo
+          ? ` — axial angular (dF/D=${factorF!.toFixed(2)}, dB/D=${factorB!.toFixed(2)})`
+          : ` — correccion axial angular (sin geometria: aprox.)`
+      } else {
+        src = ` — correccion radial`
+      }
+
+      locs.forEach(loc => corrections.push({
+        id: `v-${loc}`, location: loc, direction: 'vertical', side,
+        magnitude: Math.abs(net), unit: 'µm', priority: pV,
+        description: `Correccion vertical ${urgency(pV)}: ${action} ${Math.abs(net).toFixed(0)} um en ${label}${src}`,
+      }))
     }
+
+    emitVertical(frontNet, ['front-left', 'front-right'], true)
+    emitVertical(backNet,  ['back-left',  'back-right'],  false)
   }
 
-  // ── Runout axial — solo texto, sin flecha 3D (location: shaft) ────────────
-  if (reading.runoutAxial > RUNOUT_THRESHOLDS.axial_critical) {
-    corrections.push({
-      id: 'axial-critical', location: 'shaft', direction: 'vertical', side: 'top',
-      magnitude: reading.runoutAxial, priority: 1,
-      description: `Runout axial CRÍTICO: ${reading.runoutAxial} µm — revisar cara del acople y fijación axial.`,
-    })
-  } else if (reading.runoutAxial > RUNOUT_THRESHOLDS.axial_warning) {
-    corrections.push({
-      id: 'axial-warning', location: 'shaft', direction: 'vertical', side: 'top',
-      magnitude: reading.runoutAxial, priority: 2,
-      description: `Runout axial elevado: ${reading.runoutAxial} µm — verificar paralelismo del acople.`,
-    })
-  }
+  // ── Correcciones horizontales combinadas ──────────────────────────────────
+  const hasRadialH = pRadial !== null && rdR && !rdIncoherent && Math.abs(rd_hComp) > DEAD
+  const hasAxialH  = pAxial  !== null && axR  && Math.abs(ax_hErr)  > DEAD
 
-  // ── Runout radial — solo texto ─────────────────────────────────────────────
-  if (reading.runoutRadial > RUNOUT_THRESHOLDS.radial_critical) {
-    corrections.push({
-      id: 'radial-critical', location: 'shaft', direction: 'horizontal', side: 'right',
-      magnitude: reading.runoutRadial, priority: 1,
-      description: `Runout radial CRÍTICO: ${reading.runoutRadial} µm — verificar excentricidad del eje.`,
-    })
-  } else if (reading.runoutRadial > RUNOUT_THRESHOLDS.radial_warning) {
-    corrections.push({
-      id: 'radial-warning', location: 'shaft', direction: 'horizontal', side: 'right',
-      magnitude: reading.runoutRadial, priority: 2,
-      description: `Runout radial elevado: ${reading.runoutRadial} µm — verificar concentricidad del acople.`,
-    })
-  }
+  if (hasRadialH || hasAxialH) {
+    const radH = hasRadialH ? rd_hComp / 2 : 0
 
-  // ── Temperatura de rodamientos — solo texto ────────────────────────────────
-  if (reading.bearingTemperature !== undefined) {
-    if (reading.bearingTemperature > TEMP_THRESHOLDS.critical) {
-      corrections.push({
-        id: 'temp-critical', location: 'shaft', direction: 'vertical', side: 'top',
-        magnitude: reading.bearingTemperature, priority: 1,
-        description: `Temperatura CRÍTICA: ${reading.bearingTemperature}°C — parar equipo inmediatamente.`,
-      })
-    } else if (reading.bearingTemperature > TEMP_THRESHOLDS.warning) {
-      corrections.push({
-        id: 'temp-warning', location: 'shaft', direction: 'vertical', side: 'top',
-        magnitude: reading.bearingTemperature, priority: 2,
-        description: `Temperatura elevada: ${reading.bearingTemperature}°C — programar revisión.`,
-      })
+    let axFrontH: number, axBackH: number
+    if (hasAxialH && hasGeo) {
+      axFrontH = ax_hErr * factorF!
+      axBackH  = ax_hErr * factorB!
+    } else if (hasAxialH) {
+      axFrontH = 0
+      axBackH  = ax_hErr
+    } else {
+      axFrontH = 0; axBackH = 0
     }
+
+    const frontNet = radH + axFrontH
+    const backNet  = radH + axBackH
+    const pH       = maxPriority(hasRadialH ? pRadial : null, hasAxialH ? pAxial : null)
+
+    const emitHorizontal = (net: number, locs: PataLocation[], isFront: boolean) => {
+      if (Math.abs(net) <= DEAD) return
+      const side   = net > 0 ? 'right' as const : 'left' as const
+      const action = net > 0 ? 'mover a la derecha' : 'mover a la izquierda'
+      const label  = isFront ? 'patas delanteras' : 'patas traseras'
+      const axPart = isFront ? axFrontH : axBackH
+      const factor = isFront ? factorF : factorB
+
+      let src: string
+      if (hasRadialH && hasAxialH) {
+        if (Math.abs(axPart) > DEAD) {
+          const factorStr = hasGeo ? ` (factor ${factor!.toFixed(2)})` : ' (aprox.)'
+          src = ` — radial ${Math.abs(radH).toFixed(0)} + axial ${Math.abs(axPart).toFixed(0)} um${factorStr}`
+        } else {
+          src = ` — solo radial; axial compensado en este par`
+        }
+      } else if (hasAxialH) {
+        src = hasGeo
+          ? ` — axial angular (factor ${factor!.toFixed(2)})`
+          : ` — correccion axial angular (sin geometria: aprox.)`
+      } else {
+        src = ` — correccion radial`
+      }
+
+      locs.forEach(loc => corrections.push({
+        id: `h-${loc}`, location: loc, direction: 'horizontal', side,
+        magnitude: Math.abs(net), unit: 'µm', priority: pH,
+        description: `Correccion horizontal ${urgency(pH)}: ${action} ${Math.abs(net).toFixed(0)} um — ${label}${src}`,
+      }))
+    }
+
+    emitHorizontal(frontNet, ['front-left', 'front-right'], true)
+    emitHorizontal(backNet,  ['back-left',  'back-right'],  false)
+  }
+
+  // ── Axial: ambos planos en banda muerta pero TIR supera umbral ────────────
+  if (pAxial !== null && axR && Math.abs(ax_r6) <= DEAD && Math.abs(ax_hErr) <= DEAD) {
+    corrections.push({
+      id: 'axial-generic', location: 'shaft', direction: 'axial', side: 'front',
+      magnitude: tirAxial, unit: 'µm', priority: pAxial,
+      description: `Runout axial ${urgency(pAxial)}: ${tirAxial.toFixed(0)} um — revisar montaje del reloj y cara del acople.`,
+    })
   }
 
   return corrections.sort((a, b) => a.priority - b.priority)
