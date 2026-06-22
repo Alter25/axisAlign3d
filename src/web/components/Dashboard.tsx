@@ -136,7 +136,7 @@ export function Dashboard() {
           devMode={devMode}
           positionsOverride={positionsOverride}
           offsetsOverride={offsetsOverride}
-          arrowScale={devMode ? editorState.arrowScale : 15}
+          arrowScale={devMode ? editorState.arrowScale : 22.5}
           autoRotate={autoRotate}
           devPositions={devMode ? editorState.positions : undefined}
           onDevPositionChange={devMode ? handlePataMove : undefined}

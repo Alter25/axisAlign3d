@@ -58,7 +58,7 @@ function sideQuaternion(side: string, xDir: THREE.Vector3, yDir: THREE.Vector3, 
   return new THREE.Quaternion().setFromUnitVectors(_up, target.normalize())
 }
 
-function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 15, axisPoints, axialPosition }: Arrow3DProps) {
+function Arrow3D({ correction, positionsOverride, offsetsOverride, arrowScale = 22.5, axisPoints, axialPosition }: Arrow3DProps) {
   const groupRef = useRef<Group>(null)
   const color    = PRIORITY_COLORS[correction.priority]
 
