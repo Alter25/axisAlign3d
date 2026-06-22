@@ -12,10 +12,10 @@ const PRIORITY_LABELS: Record<1 | 2 | 3, string> = {
 }
 
 const LOCATION_LABELS: Record<string, string> = {
-  'front-left':  'Pata Delantera Izq.',
-  'front-right': 'Pata Delantera Der.',
-  'back-left':   'Pata Trasera Izq.',
-  'back-right':  'Pata Trasera Der.',
+  'front-left':  'Pata Del. Izq.',
+  'front-right': 'Pata Del. Der.',
+  'back-left':   'Pata Tras. Izq.',
+  'back-right':  'Pata Tras. Der.',
   shaft:         'Eje / Acople',
 }
 
@@ -34,14 +34,46 @@ const SIDE_LABELS: Record<string, string> = {
   back:   '⟶ Alejar del acople',
 }
 
+// ── Agrupación ────────────────────────────────────────────────────────────────
+
+interface GroupedCorrection {
+  representative: AlignmentCorrection
+  locations: string[]
+}
+
+function groupCorrections(corrections: AlignmentCorrection[]): GroupedCorrection[] {
+  const groups = new Map<string, AlignmentCorrection[]>()
+  for (const c of corrections) {
+    const key = `${c.direction}|${c.side}|${c.magnitude.toFixed(1)}|${c.priority}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(c)
+  }
+  return Array.from(groups.values()).map(group => ({
+    representative: group[0],
+    locations: group.map(c => c.location),
+  }))
+}
+
+function locationLabel(locations: string[]): string {
+  const set = new Set(locations)
+  const all4 = ['front-left', 'front-right', 'back-left', 'back-right']
+  if (set.size === 4 && all4.every(l => set.has(l))) return 'Las 4 Patas'
+  if (set.size === 2 && set.has('front-left') && set.has('front-right')) return 'Patas Delanteras'
+  if (set.size === 2 && set.has('back-left')  && set.has('back-right'))  return 'Patas Traseras'
+  return locations.map(l => LOCATION_LABELS[l] ?? l).join(' + ')
+}
+
+// ── StepCard ──────────────────────────────────────────────────────────────────
+
 interface StepCardProps {
-  correction: AlignmentCorrection
+  group: GroupedCorrection
   step: number
 }
 
-function StepCard({ correction, step }: StepCardProps) {
-  const color = PRIORITY_COLORS[correction.priority]
-  const unit = correction.unit ?? ''
+function StepCard({ group, step }: StepCardProps) {
+  const { representative: c, locations } = group
+  const color = PRIORITY_COLORS[c.priority]
+  const unit  = c.unit ?? ''
 
   return (
     <div
@@ -50,42 +82,46 @@ function StepCard({ correction, step }: StepCardProps) {
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-bold tracking-widest" style={{ color }}>
-          PASO {step} — {PRIORITY_LABELS[correction.priority]}
+          PASO {step} — {PRIORITY_LABELS[c.priority]}
         </span>
         <span className="rounded-full px-2 py-0.5 text-xs font-semibold text-white" style={{ backgroundColor: color }}>
-          {LOCATION_LABELS[correction.location] ?? correction.location}
+          {locationLabel(locations)}
         </span>
       </div>
 
       <p className="text-sm font-semibold text-slate-800">
-        {DIRECTION_LABELS[correction.direction] ?? correction.direction}
+        {DIRECTION_LABELS[c.direction] ?? c.direction}
         {' — '}
-        {SIDE_LABELS[correction.side] ?? correction.side}
+        {SIDE_LABELS[c.side] ?? c.side}
       </p>
 
       <p className="mt-0.5 text-sm text-slate-600">
-        Magnitud: <span className="font-mono font-semibold">{correction.magnitude.toFixed(1)} {unit}</span>
+        Magnitud: <span className="font-mono font-semibold">{c.magnitude.toFixed(1)} {unit}</span>
       </p>
 
-      <p className="mt-2 text-sm text-slate-500">{correction.description}</p>
+      <p className="mt-2 text-sm text-slate-500">{c.description}</p>
     </div>
   )
 }
 
+// ── CorrectionSteps ───────────────────────────────────────────────────────────
+
 export function CorrectionSteps({ corrections }: CorrectionStepsProps) {
   if (corrections.length === 0) return null
+
+  const grouped = groupCorrections(corrections)
 
   return (
     <div className="flex flex-col gap-3 p-4">
       <h2 className="text-lg font-semibold text-slate-800">
         Pasos de Corrección
         <span className="ml-2 text-sm font-normal text-slate-500">
-          ({corrections.length} {corrections.length === 1 ? 'corrección' : 'correcciones'})
+          ({grouped.length} {grouped.length === 1 ? 'corrección' : 'correcciones'})
         </span>
       </h2>
 
-      {corrections.map((c, i) => (
-        <StepCard key={c.id} correction={c} step={i + 1} />
+      {grouped.map((g, i) => (
+        <StepCard key={g.representative.id} group={g} step={i + 1} />
       ))}
     </div>
   )

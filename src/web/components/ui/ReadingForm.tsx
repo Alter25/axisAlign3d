@@ -15,6 +15,7 @@ interface FieldState {
 interface FormErrors {
   dialAxial?: string
   dialRadial?: string
+  form?: string
 }
 
 const empty: FieldState = {
@@ -35,10 +36,8 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
     const axialFilled  = hasFilled(fields.dialAxial)
     const radialFilled = hasFilled(fields.dialRadial)
 
-    if (!axialFilled && !radialFilled) {
-      next.dialAxial  = 'Ingresa lecturas en al menos uno de los dos relojes'
-      next.dialRadial = 'Ingresa lecturas en al menos uno de los dos relojes'
-    }
+    if (!axialFilled && !radialFilled)
+      next.form = 'Ingresa lecturas en al menos uno de los dos relojes'
 
     setErrors(next)
     return Object.keys(next).length === 0
@@ -104,6 +103,10 @@ export function ReadingForm({ onSubmit }: ReadingFormProps) {
         }}
         error={errors.dialRadial}
       />
+
+      {errors.form && (
+        <p className="text-xs text-red-500">{errors.form}</p>
+      )}
 
       <div className="flex gap-2 pt-1">
         <button

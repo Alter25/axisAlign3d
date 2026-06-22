@@ -105,8 +105,8 @@ export function Dashboard() {
     ? DEV_CORRECTIONS.filter(c => editorState.visibleArrows[c.id] !== false)
     : corrections
 
-  const positionsOverride = devMode ? editorState.positions : undefined
-  const offsetsOverride   = devMode ? editorState.offsets   : undefined
+  const positionsOverride = editorState.positions            // always use calibrated positions from localStorage
+  const offsetsOverride   = devMode ? editorState.offsets : undefined
 
   function handlePataMove(key: keyof typeof PATA_POSITIONS, pos: [number, number, number]) {
     setEditorState(s => ({ ...s, positions: { ...s.positions, [key]: pos } }))
@@ -140,10 +140,10 @@ export function Dashboard() {
           autoRotate={autoRotate}
           devPositions={devMode ? editorState.positions : undefined}
           onDevPositionChange={devMode ? handlePataMove : undefined}
-          axisPoints={devMode ? editorState.axisPoints : undefined}
+          axisPoints={editorState.axisPoints}
           onAxisPointsChange={devMode ? handleAxisChange : undefined}
           markerSize={devMode ? editorState.markerSize : undefined}
-          axialPosition={devMode ? editorState.axialPosition : undefined}
+          axialPosition={editorState.axialPosition}
           onAxialPositionChange={devMode ? handleAxialPositionChange : undefined}
           viewPreset={viewPreset}
         />

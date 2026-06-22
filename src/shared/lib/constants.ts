@@ -21,7 +21,7 @@ export const AXIS_POINTS = {
 // front = lado del acople, back = lado trasero
 // left/right desde el frente mirando al motor
 export const PATA_POSITIONS = {
-  'front-left':  [  9.000,  -0.500, -33.837] as [number, number, number],
+  'front-left':  [-54.255,  -0.500,  29.311] as [number, number, number],
   'front-right': [ -9.633,  -0.500, -54.944] as [number, number, number],
   'back-left':   [ 38.284,  -0.500, 122.020] as [number, number, number],
   'back-right':  [126.553,  -0.500,  41.481] as [number, number, number],
