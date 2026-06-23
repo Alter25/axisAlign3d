@@ -1,9 +1,8 @@
 import { useGLTF } from '@react-three/drei'
-
-const MODEL_PATH = '/src/assets/models/pump-motor-assembly.glb'
+import modelUrl from '@/assets/models/pump-motor-assembly.glb'
 
 export function EquipmentModel() {
-  const { scene } = useGLTF(MODEL_PATH)
+  const { scene } = useGLTF(modelUrl)
 
   return (
     <primitive
@@ -15,4 +14,4 @@ export function EquipmentModel() {
   )
 }
 
-useGLTF.preload(MODEL_PATH)
+useGLTF.preload(modelUrl)
